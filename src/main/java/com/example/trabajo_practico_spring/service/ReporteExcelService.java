@@ -10,8 +10,7 @@ import org.apache.poi.ss.usermodel.HorizontalAlignment;
 import org.apache.poi.ss.usermodel.IndexedColors;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
@@ -23,6 +22,9 @@ import java.util.List;
 @Service
 public class ReporteExcelService {
 
+    /** Filas que SXSSF mantiene en RAM; las anteriores se vuelcan a un archivo temporal en disco. */
+    private static final int FILAS_EN_MEMORIA = 100;
+
     private static final DateTimeFormatter FORMATO_FECHA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final String[] HEADERS = {
             "Numero Factura", "Fecha Emision", "Cliente", "Condicion IVA",
@@ -30,8 +32,9 @@ public class ReporteExcelService {
     };
 
     public byte[] generarReporteExcel(List<FacturaReporteDTO> facturas) throws IOException {
-        try (Workbook workbook = new XSSFWorkbook();
-             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+        SXSSFWorkbook workbook = new SXSSFWorkbook(FILAS_EN_MEMORIA);
+        workbook.setCompressTempFiles(true);
+        try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
 
             Sheet sheet = workbook.createSheet("Reporte de Ventas");
 
@@ -116,6 +119,9 @@ public class ReporteExcelService {
 
             workbook.write(out);
             return out.toByteArray();
+        } finally {
+            workbook.close();
+            workbook.dispose(); // elimina los archivos temporales
         }
     }
 

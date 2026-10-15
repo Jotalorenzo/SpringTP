@@ -16,6 +16,7 @@
 
 	<properties>
 		<java.version>21</java.version>
+		<start-class>com.example.trabajo_practico_spring.TrabajoPracticoSpringApplication</start-class>
 	</properties>
 
 	<dependencies>
