@@ -1,13 +1,13 @@
 package com.example.trabajo_practico_spring.controller;
 
-import com.example.trabajo_practico_spring.model.Cliente;
+import com.example.trabajo_practico_spring.dto.ClienteDTO;
 import com.example.trabajo_practico_spring.model.Articulo;
 import com.example.trabajo_practico_spring.model.PuntoVenta;
 import com.example.trabajo_practico_spring.model.TipoMoneda;
-import com.example.trabajo_practico_spring.repository.ClienteRepository;
 import com.example.trabajo_practico_spring.repository.ArticuloRepository;
 import com.example.trabajo_practico_spring.repository.PuntoVentaRepository;
 import com.example.trabajo_practico_spring.repository.TipoMonedaRepository;
+import com.example.trabajo_practico_spring.service.ClienteService;
 
 import com.example.trabajo_practico_spring.dto.FacturaReporteDTO;
 import com.example.trabajo_practico_spring.dto.FacturaRequestDTO;
@@ -43,7 +43,7 @@ public class FacturaRestController {
     private final FacturaService facturaService;
     private final ReportePdfService reportePdfService;
     private final ReporteExcelService reporteExcelService;
-    private final ClienteRepository clienteRepository;
+    private final ClienteService clienteService;
     private final ArticuloRepository articuloRepository;
     private final PuntoVentaRepository puntoVentaRepository;
     private final TipoMonedaRepository tipoMonedaRepository;
@@ -52,14 +52,14 @@ public class FacturaRestController {
     public FacturaRestController(FacturaService facturaService,
                                  ReportePdfService reportePdfService,
                                  ReporteExcelService reporteExcelService,
-                                 ClienteRepository clienteRepository,
+                                 ClienteService clienteService,
                                  ArticuloRepository articuloRepository,
                                  PuntoVentaRepository puntoVentaRepository,
                                  TipoMonedaRepository tipoMonedaRepository) {
         this.facturaService = facturaService;
         this.reportePdfService = reportePdfService;
         this.reporteExcelService = reporteExcelService;
-        this.clienteRepository = clienteRepository;
+        this.clienteService = clienteService;
         this.articuloRepository = articuloRepository;
         this.puntoVentaRepository = puntoVentaRepository;
         this.tipoMonedaRepository = tipoMonedaRepository;
@@ -155,8 +155,8 @@ public class FacturaRestController {
 
 
     @GetMapping("/clientes")
-    public ResponseEntity<List<Cliente>> getClientes() {
-        return ResponseEntity.ok(clienteRepository.findAll());
+    public ResponseEntity<List<ClienteDTO>> getClientes() {
+        return ResponseEntity.ok(clienteService.listar());
     }
 
     @GetMapping("/articulos")

@@ -31,7 +31,7 @@ public class FacturaRepository {
             "LEFT JOIN f.cliente c " +
             "JOIN f.condicionIva ci " +
             "JOIN f.puntoVenta pv " +
-            "JOIN f.detalles d ";
+            "LEFT JOIN f.detalles d ";
 
     private static final String GROUP_BY =
             "GROUP BY f.id, f.numero, f.fechaEmision, c.denominacion, " +
