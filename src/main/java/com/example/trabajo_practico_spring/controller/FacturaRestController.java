@@ -1,5 +1,14 @@
 package com.example.trabajo_practico_spring.controller;
 
+import com.example.trabajo_practico_spring.model.Cliente;
+import com.example.trabajo_practico_spring.model.Articulo;
+import com.example.trabajo_practico_spring.model.PuntoVenta;
+import com.example.trabajo_practico_spring.model.TipoMoneda;
+import com.example.trabajo_practico_spring.repository.ClienteRepository;
+import com.example.trabajo_practico_spring.repository.ArticuloRepository;
+import com.example.trabajo_practico_spring.repository.PuntoVentaRepository;
+import com.example.trabajo_practico_spring.repository.TipoMonedaRepository;
+
 import com.example.trabajo_practico_spring.dto.FacturaReporteDTO;
 import com.example.trabajo_practico_spring.dto.FacturaRequestDTO;
 import com.example.trabajo_practico_spring.service.FacturaService;
@@ -12,6 +21,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -27,19 +37,32 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/facturas")
+@CrossOrigin(origins = "*")
 public class FacturaRestController {
 
     private final FacturaService facturaService;
     private final ReportePdfService reportePdfService;
     private final ReporteExcelService reporteExcelService;
+    private final ClienteRepository clienteRepository;
+    private final ArticuloRepository articuloRepository;
+    private final PuntoVentaRepository puntoVentaRepository;
+    private final TipoMonedaRepository tipoMonedaRepository;
 
-    @Autowired
+@Autowired
     public FacturaRestController(FacturaService facturaService,
                                  ReportePdfService reportePdfService,
-                                 ReporteExcelService reporteExcelService) {
+                                 ReporteExcelService reporteExcelService,
+                                 ClienteRepository clienteRepository,
+                                 ArticuloRepository articuloRepository,
+                                 PuntoVentaRepository puntoVentaRepository,
+                                 TipoMonedaRepository tipoMonedaRepository) {
         this.facturaService = facturaService;
         this.reportePdfService = reportePdfService;
         this.reporteExcelService = reporteExcelService;
+        this.clienteRepository = clienteRepository;
+        this.articuloRepository = articuloRepository;
+        this.puntoVentaRepository = puntoVentaRepository;
+        this.tipoMonedaRepository = tipoMonedaRepository;
     }
 
     // ------------------------------------------------------------------ lectura
@@ -128,5 +151,26 @@ public class FacturaRestController {
     public ResponseEntity<Void> eliminar(@PathVariable Long id) {
         facturaService.eliminar(id);
         return ResponseEntity.noContent().build();
+    }
+
+
+    @GetMapping("/clientes")
+    public ResponseEntity<List<Cliente>> getClientes() {
+        return ResponseEntity.ok(clienteRepository.findAll());
+    }
+
+    @GetMapping("/articulos")
+    public ResponseEntity<List<Articulo>> getArticulos() {
+        return ResponseEntity.ok(articuloRepository.findAll());
+    }
+
+    @GetMapping("/puntos-venta")
+    public ResponseEntity<List<PuntoVenta>> getPuntosVenta() {
+        return ResponseEntity.ok(puntoVentaRepository.findAll());
+    }
+
+    @GetMapping("/tipos-moneda")
+    public ResponseEntity<List<TipoMoneda>> getTiposMoneda() {
+        return ResponseEntity.ok(tipoMonedaRepository.findAll());
     }
 }

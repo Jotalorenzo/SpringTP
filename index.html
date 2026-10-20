@@ -1,0 +1,323 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generar Factura</title>
+
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --background: #f3f6fb;
+            --surface: #ffffff;
+            --text: #172033;
+            --muted: #64748b;
+            --border: #e2e8f0;
+            --radius: 12px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Inter, system-ui, -apple-system, sans-serif;
+            background: var(--background);
+            color: var(--text);
+            padding: 40px 20px;
+            max-width: 900px;
+            margin: 0 auto;
+            line-height: 1.5;
+        }
+
+        h1 {
+            font-size: 30px;
+            font-weight: 750;
+            letter-spacing: -0.8px;
+            margin: 0 0 8px;
+            color: #111827;
+        }
+
+        h1::after {
+            content: "";
+            display: block;
+            width: 46px;
+            height: 4px;
+            background: var(--primary);
+            border-radius: 4px;
+            margin-top: 14px;
+            margin-bottom: 28px;
+        }
+
+        h3 {
+            font-size: 17px;
+            font-weight: 700;
+            margin: 0 0 22px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        h3::before {
+            content: "";
+            display: block;
+            width: 4px;
+            height: 20px;
+            background: var(--primary);
+            border-radius: 4px;
+        }
+
+        .section {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            padding: 26px;
+            margin-bottom: 22px;
+            border-radius: var(--radius);
+            box-shadow: 0 4px 14px rgba(15, 23, 42, 0.035);
+        }
+
+        .form-group {
+            margin-bottom: 18px;
+        }
+
+        .form-group:last-child {
+            margin-bottom: 0;
+        }
+
+        label {
+            display: block;
+            font-size: 13px;
+            font-weight: 650;
+            color: #475569;
+            margin-bottom: 7px;
+        }
+
+        select,
+        input[type="number"] {
+            font: inherit;
+            font-size: 14px;
+            color: var(--text);
+            background: #fff;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 11px 12px;
+            min-height: 44px;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        select {
+            width: 100%;
+            cursor: pointer;
+        }
+
+        input[type="number"] {
+            width: 90px !important;
+        }
+
+        select:focus,
+        input[type="number"]:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+        }
+
+        #articuloSelect {
+            flex: 1;
+            min-width: 180px;
+        }
+
+        .section:nth-of-type(2) .form-group {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: end;
+            gap: 12px;
+        }
+
+        .section:nth-of-type(2) .form-group label {
+            margin-bottom: 7px;
+        }
+
+        .section:nth-of-type(2) .form-group label:first-child {
+            width: 100%;
+            margin-bottom: -5px;
+        }
+
+        .section:nth-of-type(2) .form-group label:nth-of-type(2) {
+            margin-bottom: 0;
+            align-self: center;
+        }
+
+        button {
+            font: inherit;
+            font-size: 14px;
+            font-weight: 650;
+            padding: 11px 16px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            border-radius: 8px;
+            transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+        }
+
+        #btnAgregarLinea {
+            background: #eff6ff;
+            color: var(--primary);
+            border-color: #bfdbfe;
+        }
+
+        #btnAgregarLinea:hover {
+            background: #dbeafe;
+        }
+
+        #btnGuardarFactura {
+            background: var(--primary) !important;
+            color: white !important;
+            font-weight: 700 !important;
+            padding: 13px 22px;
+            min-height: 48px;
+            box-shadow: 0 4px 10px rgba(37, 99, 235, 0.2);
+        }
+
+        #btnGuardarFactura:hover {
+            background: var(--primary-hover) !important;
+            box-shadow: 0 6px 14px rgba(37, 99, 235, 0.25);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            margin-top: 22px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            border-radius: 9px;
+            font-size: 14px;
+        }
+
+        th, td {
+            padding: 13px 15px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            background: #f8fafc;
+            color: #475569;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.45px;
+        }
+
+        td {
+            color: #334155;
+            background: #fff;
+        }
+
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        tbody tr:hover td {
+            background: #f8fafc;
+        }
+
+        @media (max-width: 600px) {
+            body {
+                padding: 24px 14px;
+            }
+
+            h1 {
+                font-size: 25px;
+            }
+
+            .section {
+                padding: 19px;
+            }
+
+            .section:nth-of-type(2) .form-group {
+                align-items: stretch;
+            }
+
+            #articuloSelect {
+                width: 100%;
+                flex-basis: 100%;
+            }
+
+            #btnAgregarLinea {
+                width: 100%;
+            }
+
+            #btnGuardarFactura {
+                width: 100%;
+            }
+
+            table {
+                font-size: 12px;
+            }
+
+            th, td {
+                padding: 10px 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Crear Nueva Factura</h1>
+
+    <div class="section">
+        <h3>Cabecera de Factura</h3>
+
+        <div class="form-group">
+            <label>Cliente:</label>
+            <select id="clienteSelect"><option value="">Cargando...</option></select>
+        </div>
+
+        <div class="form-group">
+            <label>Punto de Venta:</label>
+            <select id="puntoVentaSelect"><option value="">Cargando...</option></select>
+        </div>
+
+        <div class="form-group">
+            <label>Moneda:</label>
+            <select id="monedaSelect"><option value="">Cargando...</option></select>
+        </div>
+    </div>
+
+    <div class="section">
+        <h3>Detalle de Artículos</h3>
+
+        <div class="form-group">
+            <label>Artículo:</label>
+            <select id="articuloSelect"><option value="">Cargando...</option></select>
+
+            <label>Cantidad:</label>
+            <input type="number" id="cantidadInput" min="1" value="1" style="width: 60px;">
+
+            <button id="btnAgregarLinea">Agregar a la Factura</button>
+        </div>
+
+        <table id="tablaDetalles">
+            <thead>
+                <tr>
+                    <th>ID Artículo</th>
+                    <th>Cantidad</th>
+                    <th>Acción</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Las líneas se insertan acá dinámicamente -->
+            </tbody>
+        </table>
+    </div>
+
+    <button id="btnGuardarFactura" style="background-color: #007bff; color: white; font-weight: bold;">Generar Factura</button>
+
+    <script type="module" src="./src/app.js"></script>
+</body>
+</html>
