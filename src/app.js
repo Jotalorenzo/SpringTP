@@ -14,10 +14,10 @@ async function inicializarFormulario() {
             facturaService.obtenerTiposMoneda(),
             facturaService.obtenerArticulos()
         ]);
-        llenarSelect('clienteSelect', clientes, 'id', 'razonSocial'); // O el campo que muestre el nombre del cliente
-        llenarSelect('puntoVentaSelect', puntosVenta, 'id', 'numero');
-        llenarSelect('monedaSelect', monedas, 'id', 'nombre');
-        llenarSelect('articuloSelect', articulos, 'id', 'denominacion'); // Ajustado según tu ArticuloDTO
+        llenarSelect('clienteSelect', clientes, 'id', 'denominacion');
+        llenarSelect('puntoVentaSelect', puntosVenta, 'id', 'descripcion');
+        llenarSelect('monedaSelect', monedas, 'id', 'denominacion');
+        llenarSelect('articuloSelect', articulos, 'id', 'denominacion');
     }
     catch (error) {
         console.error("Error al cargar paramétricas:", error);
