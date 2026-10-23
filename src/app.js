@@ -86,6 +86,9 @@ async function enviarFactura() {
     }
     // Armar el payload idéntico a tu FacturaRequestDTO
     const payload = {
+        numero: +1,                                          
+        fechaEmision: new Date().toISOString().split('T')[0],       
+        condicionIvaId: 1,                                          
         clienteId,
         puntoVentaId,
         tipoMonedaId,

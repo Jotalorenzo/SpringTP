@@ -3,7 +3,7 @@ const API_URL = 'http://localhost:8080/api/facturas';
 export const facturaService = {
     // 1. Enviar la factura al backend
     crearFactura: async (facturaReq) => {
-        const response = await fetch(`${API_URL}/facturas`, {
+        const response = await fetch(`${API_URL}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
