@@ -37,19 +37,28 @@ export interface FacturaRequestDTO {
   condicionIvaId: number;
   tipoMonedaId: number;
   clienteId?: number | null;
-  estado?: string;
-  observaciones?: string;
   detalles: FacturaDetalleRequestDTO[];
 }
 
 export interface FacturaReporteDTO {
-  numeroFactura: number;
+  id: number;
+  numeroFactura?: number;
   fechaEmision: string;
   clienteDenominacion: string;
   condicionIva: string;
   puntoVentaDescripcion: string;
   importeTotal: number;
   cantidadItems: number;
+  estado: string;
+  cae?: string;
+}
+
+export interface PaginaDTO<T> {
+  contenido: T[];
+  pagina: number;
+  tamanio: number;
+  totalElementos: number;
+  totalPaginas: number;
 }
 
 export interface FacturaVentaDetalleDTO {

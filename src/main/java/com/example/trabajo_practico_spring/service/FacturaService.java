@@ -5,6 +5,7 @@ import com.example.trabajo_practico_spring.dto.FacturaReporteDTO;
 import com.example.trabajo_practico_spring.dto.FacturaRequestDTO;
 import com.example.trabajo_practico_spring.dto.FacturaVentaDTO;
 import com.example.trabajo_practico_spring.dto.FacturaVentaDetalleDTO;
+import com.example.trabajo_practico_spring.dto.PaginaDTO;
 import com.example.trabajo_practico_spring.exception.OperacionNoPermitidaException;
 import com.example.trabajo_practico_spring.exception.RecursoNoEncontradoException;
 import com.example.trabajo_practico_spring.model.FacturaVenta;
@@ -61,8 +62,8 @@ public class FacturaService {
     }
 
     /**
-     * REGLA: Si la factura ya fue informada a ARCA (tiene CAE) o ya está anulada,
-     * se bloquea cualquier modificación de sus datos o ítems.
+     * REGLA: Si la factura ya fue informada a ARCA (tiene CAE) o ya está
+     * anulada, se bloquea cualquier modificación de sus datos o ítems.
      */
     @Transactional
     public FacturaReporteDTO actualizar(Long id, FacturaRequestDTO request) {
@@ -100,9 +101,16 @@ public class FacturaService {
         return aReporteDto(facturaVentaRepository.save(factura));
     }
 
+    @Transactional(readOnly = true)
+    public PaginaDTO<FacturaReporteDTO> buscarFacturasPaginadas(
+            Long numeroFactura, LocalDate fechaDesde, LocalDate fechaHasta,
+            String cliente, String estado, Boolean informadaArca, int pagina, int tamanio) {
+        return facturaRepository.buscarFacturasPaginadas(numeroFactura, fechaDesde, fechaHasta, cliente, estado, informadaArca, pagina, tamanio);
+    }
+
     /**
-     * REGLA: Eliminación física.
-     * Si la factura posee NÚMERO o CAE, se prohíbe el borrado físico (debe anularse).
+     * REGLA: Eliminación física. Si la factura posee NÚMERO o CAE, se prohíbe
+     * el borrado físico (debe anularse).
      */
     @Transactional
     public void eliminar(Long id) {
@@ -113,7 +121,7 @@ public class FacturaService {
 
         if (tieneNumero || tieneCae) {
             throw new OperacionNoPermitidaException(
-                "No se puede eliminar físicamente una factura con número oficial o informada a ARCA. Debe utilizar la opción 'Anular'."
+                    "No se puede eliminar físicamente una factura con número oficial o informada a ARCA. Debe utilizar la opción 'Anular'."
             );
         }
 
@@ -138,7 +146,7 @@ public class FacturaService {
                 .orElseThrow(() -> new RecursoNoEncontradoException("TipoMoneda", request.getTipoMonedaId())));
         factura.setCliente(request.getClienteId() == null ? null
                 : clienteRepository.findById(request.getClienteId())
-                .orElseThrow(() -> new RecursoNoEncontradoException("Cliente", request.getClienteId())));
+                        .orElseThrow(() -> new RecursoNoEncontradoException("Cliente", request.getClienteId())));
 
         reemplazarDetalles(factura, request.getDetalles());
     }
@@ -195,18 +203,18 @@ public class FacturaService {
     private FacturaVentaDTO aDetalleDto(FacturaVenta f) {
         List<FacturaVentaDetalleDTO> detalles = f.getDetalles().stream()
                 .map(d -> FacturaVentaDetalleDTO.builder()
-                        .id(d.getId())
-                        .listaPrecioArticuloId(d.getListaPrecioArticulo().getId())
-                        .articuloId(d.getListaPrecioArticulo().getArticulo().getId())
-                        .articuloDenominacion(d.getListaPrecioArticulo().getArticulo().getDenominacion())
-                        .descripcion(d.getDescripcion())
-                        .cantidad(d.getCantidad())
-                        .precioUnitario(d.getPrecioUnitario())
-                        .porcentajeBonificacion(d.getPorcentajeBonificacion())
-                        .importeNeto(d.getImporteNeto())
-                        .importeIva(d.getImporteIva())
-                        .importeSubtotal(d.getImporteSubtotal())
-                        .build())
+                .id(d.getId())
+                .listaPrecioArticuloId(d.getListaPrecioArticulo().getId())
+                .articuloId(d.getListaPrecioArticulo().getArticulo().getId())
+                .articuloDenominacion(d.getListaPrecioArticulo().getArticulo().getDenominacion())
+                .descripcion(d.getDescripcion())
+                .cantidad(d.getCantidad())
+                .precioUnitario(d.getPrecioUnitario())
+                .porcentajeBonificacion(d.getPorcentajeBonificacion())
+                .importeNeto(d.getImporteNeto())
+                .importeIva(d.getImporteIva())
+                .importeSubtotal(d.getImporteSubtotal())
+                .build())
                 .toList();
 
         return FacturaVentaDTO.builder()

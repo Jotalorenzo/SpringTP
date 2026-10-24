@@ -4,6 +4,7 @@ import {
   FacturaVentaDTO,
   ArticuloDTO,
   ClienteDTO,
+  PaginaDTO,
   PuntoVentaDTO,
   TipoMonedaDTO,
 } from "./types.js";
@@ -99,5 +100,40 @@ export const facturaService = {
   obtenerTiposMoneda: async (): Promise<TipoMonedaDTO[]> => {
     const response = await fetch(`${API_URL}/tipos-moneda`);
     return response.ok ? response.json() : [];
+  },
+
+  descargarFacturaIndividualPdf: async (id: number): Promise<Blob> => {
+    const response = await fetch(`${API_URL}/${id}/pdf`);
+    if (!response.ok) {
+      throw new Error(`Error al generar el PDF de la factura ID ${id}`);
+    }
+    return response.blob();
+  },
+
+  buscarFacturasPaginadas: async (filtros: {
+    numeroFactura?: number;
+    fechaDesde?: string;
+    fechaHasta?: string;
+    cliente?: string;
+    estado?: string;
+    informadaArca?: boolean;
+    page?: number;
+    size?: number;
+  }): Promise<PaginaDTO<FacturaReporteDTO>> => {
+    const params = new URLSearchParams();
+    if (filtros.numeroFactura)
+      params.append("numeroFactura", filtros.numeroFactura.toString());
+    if (filtros.fechaDesde) params.append("fechaDesde", filtros.fechaDesde);
+    if (filtros.fechaHasta) params.append("fechaHasta", filtros.fechaHasta);
+    if (filtros.cliente) params.append("cliente", filtros.cliente);
+    if (filtros.estado) params.append("estado", filtros.estado);
+    if (filtros.informadaArca !== undefined)
+      params.append("informadaArca", String(filtros.informadaArca));
+    params.append("page", String(filtros.page || 0));
+    params.append("size", String(filtros.size || 5));
+
+    const response = await fetch(`${API_URL}?${params.toString()}`);
+    if (!response.ok) throw new Error("Error al consultar las facturas.");
+    return response.json();
   },
 };

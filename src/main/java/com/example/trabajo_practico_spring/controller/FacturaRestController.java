@@ -8,9 +8,10 @@ import com.example.trabajo_practico_spring.repository.ArticuloRepository;
 import com.example.trabajo_practico_spring.repository.PuntoVentaRepository;
 import com.example.trabajo_practico_spring.repository.TipoMonedaRepository;
 import com.example.trabajo_practico_spring.service.ClienteService;
-
 import com.example.trabajo_practico_spring.dto.FacturaReporteDTO;
 import com.example.trabajo_practico_spring.dto.FacturaRequestDTO;
+import com.example.trabajo_practico_spring.dto.PaginaDTO;
+import com.example.trabajo_practico_spring.service.FacturaPdfService;
 import com.example.trabajo_practico_spring.service.FacturaService;
 import com.example.trabajo_practico_spring.service.ReporteExcelService;
 import com.example.trabajo_practico_spring.service.ReportePdfService;
@@ -47,6 +48,7 @@ public class FacturaRestController {
     private final ArticuloRepository articuloRepository;
     private final PuntoVentaRepository puntoVentaRepository;
     private final TipoMonedaRepository tipoMonedaRepository;
+    private final FacturaPdfService facturaPdfService;
 
     @Autowired
     public FacturaRestController(FacturaService facturaService,
@@ -55,7 +57,8 @@ public class FacturaRestController {
             ClienteService clienteService,
             ArticuloRepository articuloRepository,
             PuntoVentaRepository puntoVentaRepository,
-            TipoMonedaRepository tipoMonedaRepository) {
+            TipoMonedaRepository tipoMonedaRepository,
+            FacturaPdfService facturaPdfService) {
         this.facturaService = facturaService;
         this.reportePdfService = reportePdfService;
         this.reporteExcelService = reporteExcelService;
@@ -63,17 +66,25 @@ public class FacturaRestController {
         this.articuloRepository = articuloRepository;
         this.puntoVentaRepository = puntoVentaRepository;
         this.tipoMonedaRepository = tipoMonedaRepository;
+        this.facturaPdfService = facturaPdfService;
     }
 
     // ------------------------------------------------------------------ lectura
     @GetMapping
-    public List<FacturaReporteDTO> buscarFacturas(
+    public ResponseEntity<PaginaDTO<FacturaReporteDTO>> buscarFacturas(
+            @RequestParam(required = false) Long numeroFactura,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaDesde,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaHasta,
+            @RequestParam(required = false) String cliente,
             @RequestParam(required = false) String estado,
-            @RequestParam(required = false) Double montoMinimo) {
+            @RequestParam(required = false) Boolean informadaArca,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "5") int size) {
 
-        return facturaService.buscarFacturasFiltradas(fechaDesde, fechaHasta, estado, montoMinimo);
+        PaginaDTO<FacturaReporteDTO> resultado = facturaService.buscarFacturasPaginadas(
+                numeroFactura, fechaDesde, fechaHasta, cliente, estado, informadaArca, page, size);
+
+        return ResponseEntity.ok(resultado);
     }
 
     @GetMapping(value = "/reporte.pdf", produces = MediaType.APPLICATION_PDF_VALUE)
@@ -170,8 +181,8 @@ public class FacturaRestController {
     }
 
     /**
-     * GET /api/facturas/{id}
-     * Obtiene el detalle completo de una factura para edición o visualización.
+     * GET /api/facturas/{id} Obtiene el detalle completo de una factura para
+     * edición o visualización.
      */
     @GetMapping("/{id}")
     public ResponseEntity<com.example.trabajo_practico_spring.dto.FacturaVentaDTO> obtenerPorId(@PathVariable Long id) {
@@ -185,5 +196,20 @@ public class FacturaRestController {
     public ResponseEntity<FacturaReporteDTO> anular(@PathVariable Long id) {
         FacturaReporteDTO anulada = facturaService.anular(id);
         return ResponseEntity.ok(anulada);
+    }
+
+    /**
+     * GET /api/facturas/{id}/pdf Descarga la Factura Individual Legal con CAE y
+     * Vencimiento en formato PDF.
+     */
+    @GetMapping(value = "/{id}/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> descargarFacturaIndividualPdf(@PathVariable Long id) throws Exception {
+        byte[] pdf = facturaPdfService.generarFacturaPdf(id);
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=factura-" + id + ".pdf")
+                .contentType(MediaType.APPLICATION_PDF)
+                .contentLength(pdf.length)
+                .body(pdf);
     }
 }
