@@ -48,14 +48,14 @@ public class FacturaRestController {
     private final PuntoVentaRepository puntoVentaRepository;
     private final TipoMonedaRepository tipoMonedaRepository;
 
-@Autowired
+    @Autowired
     public FacturaRestController(FacturaService facturaService,
-                                 ReportePdfService reportePdfService,
-                                 ReporteExcelService reporteExcelService,
-                                 ClienteService clienteService,
-                                 ArticuloRepository articuloRepository,
-                                 PuntoVentaRepository puntoVentaRepository,
-                                 TipoMonedaRepository tipoMonedaRepository) {
+            ReportePdfService reportePdfService,
+            ReporteExcelService reporteExcelService,
+            ClienteService clienteService,
+            ArticuloRepository articuloRepository,
+            PuntoVentaRepository puntoVentaRepository,
+            TipoMonedaRepository tipoMonedaRepository) {
         this.facturaService = facturaService;
         this.reportePdfService = reportePdfService;
         this.reporteExcelService = reporteExcelService;
@@ -66,7 +66,6 @@ public class FacturaRestController {
     }
 
     // ------------------------------------------------------------------ lectura
-
     @GetMapping
     public List<FacturaReporteDTO> buscarFacturas(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaDesde,
@@ -84,8 +83,8 @@ public class FacturaRestController {
             @RequestParam(required = false) String estado,
             @RequestParam(required = false) Double montoMinimo) throws Exception {
 
-        List<FacturaReporteDTO> facturas =
-                facturaService.buscarFacturasFiltradas(fechaDesde, fechaHasta, estado, montoMinimo);
+        List<FacturaReporteDTO> facturas
+                = facturaService.buscarFacturasFiltradas(fechaDesde, fechaHasta, estado, montoMinimo);
         byte[] pdf = reportePdfService.generarReportePdf(facturas);
 
         return ResponseEntity.ok()
@@ -103,8 +102,8 @@ public class FacturaRestController {
             @RequestParam(required = false) String estado,
             @RequestParam(required = false) Double montoMinimo) throws Exception {
 
-        List<FacturaReporteDTO> facturas =
-                facturaService.buscarFacturasFiltradas(fechaDesde, fechaHasta, estado, montoMinimo);
+        List<FacturaReporteDTO> facturas
+                = facturaService.buscarFacturasFiltradas(fechaDesde, fechaHasta, estado, montoMinimo);
         byte[] excel = reporteExcelService.generarReporteExcel(facturas);
 
         return ResponseEntity.ok()
@@ -116,11 +115,10 @@ public class FacturaRestController {
     }
 
     // ----------------------------------------------------------------- escritura
-
     /**
-     * POST /api/facturas
-     * Crea una nueva factura con sus detalles. Calcula neto, IVA y total automáticamente.
-     * Retorna 201 Created con el resumen de la factura generada.
+     * POST /api/facturas Crea una nueva factura con sus detalles. Calcula neto,
+     * IVA y total automáticamente. Retorna 201 Created con el resumen de la
+     * factura generada.
      */
     @PostMapping
     public ResponseEntity<FacturaReporteDTO> crear(@RequestBody @Valid FacturaRequestDTO request) {
@@ -129,22 +127,20 @@ public class FacturaRestController {
     }
 
     /**
-     * PUT /api/facturas/{id}
-     * Actualiza cabecera e ítems de una factura existente.
-     * Si el estado pasa a "ANULADA" se registra la fecha de anulación automáticamente.
-     * Retorna 200 OK con el resumen actualizado.
+     * PUT /api/facturas/{id} Actualiza cabecera e ítems de una factura
+     * existente. Si el estado pasa a "ANULADA" se registra la fecha de
+     * anulación automáticamente. Retorna 200 OK con el resumen actualizado.
      */
     @PutMapping("/{id}")
     public ResponseEntity<FacturaReporteDTO> actualizar(@PathVariable Long id,
-                                                        @RequestBody @Valid FacturaRequestDTO request) {
+            @RequestBody @Valid FacturaRequestDTO request) {
         FacturaReporteDTO actualizada = facturaService.actualizar(id, request);
         return ResponseEntity.ok(actualizada);
     }
 
     /**
-     * DELETE /api/facturas/{id}
-     * Eliminación física de la factura y sus detalles (en cascada).
-     * Para anulación lógica usar PUT con estado = "ANULADA".
+     * DELETE /api/facturas/{id} Eliminación física de la factura y sus detalles
+     * (en cascada). Para anulación lógica usar PUT con estado = "ANULADA".
      * Retorna 204 No Content.
      */
     @DeleteMapping("/{id}")
@@ -152,7 +148,6 @@ public class FacturaRestController {
         facturaService.eliminar(id);
         return ResponseEntity.noContent().build();
     }
-
 
     @GetMapping("/clientes")
     public ResponseEntity<List<ClienteDTO>> getClientes() {
@@ -172,5 +167,23 @@ public class FacturaRestController {
     @GetMapping("/tipos-moneda")
     public ResponseEntity<List<TipoMoneda>> getTiposMoneda() {
         return ResponseEntity.ok(tipoMonedaRepository.findAll());
+    }
+
+    /**
+     * GET /api/facturas/{id}
+     * Obtiene el detalle completo de una factura para edición o visualización.
+     */
+    @GetMapping("/{id}")
+    public ResponseEntity<com.example.trabajo_practico_spring.dto.FacturaVentaDTO> obtenerPorId(@PathVariable Long id) {
+        return ResponseEntity.ok(facturaService.obtener(id));
+    }
+
+    /**
+     * PUT /api/facturas/{id}/anular Anula lógicamente la factura.
+     */
+    @PutMapping("/{id}/anular")
+    public ResponseEntity<FacturaReporteDTO> anular(@PathVariable Long id) {
+        FacturaReporteDTO anulada = facturaService.anular(id);
+        return ResponseEntity.ok(anulada);
     }
 }

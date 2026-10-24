@@ -5,6 +5,7 @@ import com.example.trabajo_practico_spring.dto.FacturaReporteDTO;
 import com.example.trabajo_practico_spring.dto.FacturaRequestDTO;
 import com.example.trabajo_practico_spring.dto.FacturaVentaDTO;
 import com.example.trabajo_practico_spring.dto.FacturaVentaDetalleDTO;
+import com.example.trabajo_practico_spring.exception.OperacionNoPermitidaException;
 import com.example.trabajo_practico_spring.exception.RecursoNoEncontradoException;
 import com.example.trabajo_practico_spring.model.FacturaVenta;
 import com.example.trabajo_practico_spring.model.FacturaVentaDetalle;
@@ -40,13 +41,8 @@ public class FacturaService {
     private final ListaPrecioArticuloRepository listaPrecioArticuloRepository;
     private final AuditoriaService auditoria;
 
-    // ------------------------------------------------------------------ lectura
-
     @Transactional(readOnly = true)
-    public List<FacturaReporteDTO> buscarFacturasFiltradas(LocalDate fechaDesde,
-                                                           LocalDate fechaHasta,
-                                                           String estado,
-                                                           Double montoMinimo) {
+    public List<FacturaReporteDTO> buscarFacturasFiltradas(LocalDate fechaDesde, LocalDate fechaHasta, String estado, Double montoMinimo) {
         return facturaRepository.buscarFacturasFiltradas(fechaDesde, fechaHasta, estado, montoMinimo);
     }
 
@@ -55,11 +51,6 @@ public class FacturaService {
         return aDetalleDto(buscarFactura(id));
     }
 
-    // ---------------------------------------------------------------- escritura
-
-    /**
-     * Crea la factura con sus detalles (persistidos en cascada) y calcula neto, IVA y total.
-     */
     @Transactional
     public FacturaReporteDTO crear(FacturaRequestDTO request) {
         FacturaVenta factura = new FacturaVenta();
@@ -70,27 +61,64 @@ public class FacturaService {
     }
 
     /**
-     * Actualiza cabecera e items. Los detalles anteriores se reemplazan (orphanRemoval).
-     * Si el estado pasa a ANULADA se registra la fecha de anulacion.
+     * REGLA: Si la factura ya fue informada a ARCA (tiene CAE) o ya está anulada,
+     * se bloquea cualquier modificación de sus datos o ítems.
      */
     @Transactional
     public FacturaReporteDTO actualizar(Long id, FacturaRequestDTO request) {
         FacturaVenta factura = buscarFactura(id);
+
+        if (ESTADO_ANULADA.equalsIgnoreCase(factura.getEstado())) {
+            throw new OperacionNoPermitidaException("No se puede modificar una factura que ya fue ANULADA.");
+        }
+
+        boolean informadaArca = factura.getCae() != null && !factura.getCae().isBlank();
+        if (informadaArca) {
+            throw new OperacionNoPermitidaException("La factura ya fue informada a ARCA (CAE: " + factura.getCae() + "). Está bloqueada para modificaciones; solo puede ser Anulada.");
+        }
+
         aplicarDatos(factura, request);
         auditoria.completarModificacion(factura);
         return aReporteDto(facturaVentaRepository.save(factura));
     }
 
     /**
-     * Eliminacion fisica: borra la factura y, en cascada, sus detalles.
-     * Para una anulacion logica usar actualizar() con estado = "ANULADA".
+     * REGLA: Anulación lógica. Registra fecha y estado ANULADA.
+     */
+    @Transactional
+    public FacturaReporteDTO anular(Long id) {
+        FacturaVenta factura = buscarFactura(id);
+
+        if (ESTADO_ANULADA.equalsIgnoreCase(factura.getEstado())) {
+            throw new OperacionNoPermitidaException("La factura ya se encuentra anulada.");
+        }
+
+        factura.setEstado(ESTADO_ANULADA);
+        factura.setFechaAnulacion(LocalDate.now());
+        factura.setImporteSaldo(0.0);
+        auditoria.completarModificacion(factura);
+        return aReporteDto(facturaVentaRepository.save(factura));
+    }
+
+    /**
+     * REGLA: Eliminación física.
+     * Si la factura posee NÚMERO o CAE, se prohíbe el borrado físico (debe anularse).
      */
     @Transactional
     public void eliminar(Long id) {
-        facturaVentaRepository.delete(buscarFactura(id));
-    }
+        FacturaVenta factura = buscarFactura(id);
 
-    // ------------------------------------------------------------------ helpers
+        boolean tieneNumero = factura.getNumero() != null && factura.getNumero() > 0;
+        boolean tieneCae = factura.getCae() != null && !factura.getCae().isBlank();
+
+        if (tieneNumero || tieneCae) {
+            throw new OperacionNoPermitidaException(
+                "No se puede eliminar físicamente una factura con número oficial o informada a ARCA. Debe utilizar la opción 'Anular'."
+            );
+        }
+
+        facturaVentaRepository.delete(factura);
+    }
 
     private FacturaVenta buscarFactura(Long id) {
         return facturaVentaRepository.findById(id)
@@ -112,13 +140,6 @@ public class FacturaService {
                 : clienteRepository.findById(request.getClienteId())
                 .orElseThrow(() -> new RecursoNoEncontradoException("Cliente", request.getClienteId())));
 
-        if (request.getEstado() != null && !request.getEstado().isBlank()) {
-            factura.setEstado(request.getEstado().trim().toUpperCase());
-        }
-        factura.setFechaAnulacion(ESTADO_ANULADA.equals(factura.getEstado())
-                ? (factura.getFechaAnulacion() != null ? factura.getFechaAnulacion() : LocalDate.now())
-                : null);
-
         reemplazarDetalles(factura, request.getDetalles());
     }
 
@@ -129,12 +150,10 @@ public class FacturaService {
         for (FacturaDetalleRequestDTO item : items) {
             ListaPrecioArticulo precio = listaPrecioArticuloRepository
                     .findFirstByArticuloIdOrderByIdAsc(item.getArticuloId())
-                    .orElseThrow(() -> new RecursoNoEncontradoException(
-                            "Precio del articulo", item.getArticuloId()));
+                    .orElseThrow(() -> new RecursoNoEncontradoException("Precio del articulo", item.getArticuloId()));
 
             double precioUnitario = precio.getPrecioVenta();
-            double neto = redondear(item.getCantidad() * precioUnitario
-                    * (1 - item.getPorcentajeBonificacion() / 100.0));
+            double neto = redondear(item.getCantidad() * precioUnitario * (1 - (item.getPorcentajeBonificacion() / 100.0)));
             double iva = redondear(neto * ALICUOTA_IVA);
             double subtotal = redondear(neto + iva);
 

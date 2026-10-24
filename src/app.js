@@ -1,5 +1,6 @@
 import { facturaService } from "./facturaService.js";
 let detallesActuales = [];
+let facturaCargadaActual = null;
 document.addEventListener("DOMContentLoaded", async () => {
     await inicializarFormulario();
     configurarEventos();
@@ -19,7 +20,6 @@ async function inicializarFormulario() {
     }
     catch (error) {
         console.error("Error al cargar paramétricas:", error);
-        alert("Hubo un error al conectar con el servidor para cargar los datos.");
     }
 }
 function llenarSelect(selectId, items, valueProp, textProp) {
@@ -38,7 +38,22 @@ function configurarEventos() {
         ?.addEventListener("click", agregarLinea);
     document
         .getElementById("btnGuardarFactura")
-        ?.addEventListener("click", enviarFactura);
+        ?.addEventListener("click", crearFactura);
+    document
+        .getElementById("btnActualizarFactura")
+        ?.addEventListener("click", actualizarFactura);
+    document
+        .getElementById("btnAnularFactura")
+        ?.addEventListener("click", anularFactura);
+    document
+        .getElementById("btnEliminarFactura")
+        ?.addEventListener("click", eliminarFactura);
+    document
+        .getElementById("btnBuscarFactura")
+        ?.addEventListener("click", cargarFacturaPorId);
+    document
+        .getElementById("btnNuevaFactura")
+        ?.addEventListener("click", resetearAModoNuevo);
 }
 function agregarLinea() {
     const articuloSelect = document.getElementById("articuloSelect");
@@ -46,25 +61,23 @@ function agregarLinea() {
     const articuloId = parseInt(articuloSelect.value);
     const cantidad = parseFloat(cantidadInput.value);
     if (isNaN(articuloId) || isNaN(cantidad) || cantidad <= 0) {
-        alert("Seleccione un artículo válido y una cantidad mayor a 0.");
+        alert("Seleccione un artículo válido y cantidad mayor a 0.");
         return;
     }
-    detallesActuales.push({
-        articuloId: articuloId,
-        cantidad: cantidad,
-        porcentajeBonificacion: 0.0,
-    });
+    detallesActuales.push({ articuloId, cantidad, porcentajeBonificacion: 0.0 });
     actualizarTablaUI();
 }
 function actualizarTablaUI() {
     const tbody = document.querySelector("#tablaDetalles tbody");
     tbody.innerHTML = "";
+    const bloqueado = facturaCargadaActual &&
+        (facturaCargadaActual.cae || facturaCargadaActual.estado === "ANULADA");
     detallesActuales.forEach((detalle, index) => {
         const tr = document.createElement("tr");
         tr.innerHTML = `
             <td>${detalle.articuloId}</td>
             <td>${detalle.cantidad}</td>
-            <td><button type="button" onclick="eliminarLinea(${index})">Eliminar</button></td>
+            <td>${bloqueado ? "Bloqueado" : `<button type="button" onclick="eliminarLinea(${index})">Quitar</button>`}</td>
         `;
         tbody.appendChild(tr);
     });
@@ -73,38 +86,194 @@ window.eliminarLinea = (index) => {
     detallesActuales.splice(index, 1);
     actualizarTablaUI();
 };
-async function enviarFactura() {
+function armarPayload() {
     const clienteId = parseInt(document.getElementById("clienteSelect").value);
     const puntoVentaId = parseInt(document.getElementById("puntoVentaSelect").value);
     const tipoMonedaId = parseInt(document.getElementById("monedaSelect").value);
+    const numeroInput = document.getElementById("numeroFacturaInput").value;
     if (isNaN(puntoVentaId) || isNaN(tipoMonedaId)) {
-        alert("Debe seleccionar Punto de Venta y Moneda.");
-        return;
+        alert("Punto de Venta y Moneda son obligatorios.");
+        return null;
     }
     if (detallesActuales.length === 0) {
-        alert("La factura debe tener al menos un detalle.");
-        return;
+        alert("La factura debe tener al menos un artículo.");
+        return null;
     }
-    // Generar datos obligatorios requeridos por Spring
     const hoy = new Date().toISOString().split("T")[0];
-    const numeroAleatorio = Math.floor(1000 + Math.random() * 9000);
-    const payload = {
-        numero: numeroAleatorio,
-        fechaEmision: hoy,
-        puntoVentaId: puntoVentaId,
-        condicionIvaId: 1, // ID 1 = Responsable Inscripto cargado por el Seeder
-        tipoMonedaId: tipoMonedaId,
+    const numero = numeroInput
+        ? parseInt(numeroInput)
+        : Math.floor(1000 + Math.random() * 9000);
+    return {
+        numero,
+        fechaEmision: facturaCargadaActual
+            ? facturaCargadaActual.fechaEmision
+            : hoy,
+        puntoVentaId,
+        condicionIvaId: 1,
+        tipoMonedaId,
         clienteId: isNaN(clienteId) ? null : clienteId,
         detalles: detallesActuales,
     };
+}
+async function crearFactura() {
+    const payload = armarPayload();
+    if (!payload)
+        return;
     try {
-        const respuesta = await facturaService.crearFactura(payload);
-        alert(`¡Factura generada exitosamente con Número: ${respuesta.numeroFactura}! Total: $${respuesta.importeTotal}`);
-        detallesActuales = [];
-        actualizarTablaUI();
+        const res = await facturaService.crearFactura(payload);
+        alert(`¡Factura generada exitosamente con Nro: ${res.numeroFactura}! Total: $${res.importeTotal}`);
+        resetearAModoNuevo();
     }
     catch (error) {
-        console.error(error);
-        alert(`Ocurrió un error al guardar la factura: ${error.message}`);
+        alert(error.message);
     }
+}
+async function actualizarFactura() {
+    if (!facturaCargadaActual)
+        return;
+    const payload = armarPayload();
+    if (!payload)
+        return;
+    try {
+        await facturaService.actualizarFactura(facturaCargadaActual.id, payload);
+        alert(`¡Factura #${facturaCargadaActual.id} actualizada correctamente!`);
+        resetearAModoNuevo();
+    }
+    catch (error) {
+        alert(error.message);
+    }
+}
+async function anularFactura() {
+    if (!facturaCargadaActual)
+        return;
+    if (!confirm(`¿Seguro que desea anular la factura ID ${facturaCargadaActual.id}?`))
+        return;
+    try {
+        await facturaService.anularFactura(facturaCargadaActual.id);
+        alert(`Factura anulada exitosamente.`);
+        resetearAModoNuevo();
+    }
+    catch (error) {
+        alert(error.message);
+    }
+}
+async function eliminarFactura() {
+    if (!facturaCargadaActual)
+        return;
+    if (!confirm(`¿Seguro que desea eliminar físicamente la factura ID ${facturaCargadaActual.id}?`))
+        return;
+    try {
+        await facturaService.eliminarFactura(facturaCargadaActual.id);
+        alert(`Factura eliminada.`);
+        resetearAModoNuevo();
+    }
+    catch (error) {
+        alert(error.message);
+    }
+}
+// Carga una factura y aplica las reglas de visibilidad y bloqueo
+async function cargarFacturaPorId() {
+    const input = document.getElementById("buscarIdInput");
+    const id = parseInt(input.value);
+    if (isNaN(id))
+        return alert("Ingrese un ID válido.");
+    try {
+        const f = await facturaService.obtenerFacturaPorId(id);
+        facturaCargadaActual = f;
+        document.getElementById("numeroFacturaInput").value =
+            f.numero?.toString() || "";
+        document.getElementById("clienteSelect").value =
+            f.clienteId?.toString() || "";
+        document.getElementById("puntoVentaSelect").value =
+            f.puntoVentaId?.toString() || "";
+        document.getElementById("monedaSelect").value =
+            f.tipoMonedaId?.toString() || "";
+        detallesActuales = f.detalles.map((d) => ({
+            articuloId: d.articuloId,
+            cantidad: d.cantidad,
+            porcentajeBonificacion: 0.0,
+        }));
+        aplicarReglasDeNegocioVisuales(f);
+    }
+    catch (error) {
+        alert(error.message);
+    }
+}
+function aplicarReglasDeNegocioVisuales(f) {
+    const alerta = document.getElementById("alertaEstado");
+    const btnGuardar = document.getElementById("btnGuardarFactura");
+    const btnActualizar = document.getElementById("btnActualizarFactura");
+    const btnAnular = document.getElementById("btnAnularFactura");
+    const btnEliminar = document.getElementById("btnEliminarFactura");
+    const btnAgregar = document.getElementById("btnAgregarLinea");
+    btnGuardar.style.display = "none";
+    alerta.style.display = "block";
+    const tieneCae = f.cae && f.cae.trim().length > 0;
+    const tieneNumero = f.numero && f.numero > 0;
+    const esAnulada = f.estado === "ANULADA";
+    if (esAnulada) {
+        alerta.className = "badge-anulada";
+        alerta.textContent = `FACTURA ANULADA. Bloqueada para cualquier modificación.`;
+        btnActualizar.style.display = "none";
+        btnAnular.style.display = "none";
+        btnEliminar.style.display = "none";
+        bloquearControles(true);
+    }
+    else if (tieneCae) {
+        alerta.className = "badge-arca";
+        alerta.textContent = `INFORMADA A ARCA (CAE: ${f.cae}). Modificación bloqueada. Solo se permite Anular.`;
+        btnActualizar.style.display = "none";
+        btnEliminar.style.display = "none"; // PROHIBIDO ELIMINAR
+        btnAnular.style.display = "inline-block"; // SOLO ANULAR
+        bloquearControles(true);
+    }
+    else if (tieneNumero) {
+        alerta.style.background = "#e0f2fe";
+        alerta.style.color = "#0369a1";
+        alerta.textContent = `Factura emitida con número #${f.numero}. No se puede eliminar, solo Anular o Actualizar.`;
+        btnActualizar.style.display = "inline-block";
+        btnAnular.style.display = "inline-block";
+        btnEliminar.style.display = "none"; // PROHIBIDO ELIMINAR SI TIENE NÚMERO
+        bloquearControles(false);
+    }
+    else {
+        // Es un borrador sin número ni CAE
+        alerta.style.background = "#fef3c7";
+        alerta.style.color = "#92400e";
+        alerta.textContent = `Borrador / Sin número asignado. Se puede modificar o eliminar físicamente.`;
+        btnActualizar.style.display = "inline-block";
+        btnEliminar.style.display = "inline-block"; // PERMITIDO ELIMINAR
+        btnAnular.style.display = "none";
+        bloquearControles(false);
+    }
+    actualizarTablaUI();
+}
+function bloquearControles(bloquear) {
+    document.getElementById("clienteSelect").disabled =
+        bloquear;
+    document.getElementById("puntoVentaSelect").disabled =
+        bloquear;
+    document.getElementById("monedaSelect").disabled =
+        bloquear;
+    document.getElementById("numeroFacturaInput").disabled =
+        bloquear;
+    document.getElementById("btnAgregarLinea").disabled =
+        bloquear;
+}
+function resetearAModoNuevo() {
+    facturaCargadaActual = null;
+    detallesActuales = [];
+    document.getElementById("buscarIdInput").value = "";
+    document.getElementById("numeroFacturaInput").value =
+        "";
+    document.getElementById("clienteSelect").value = "";
+    document.getElementById("puntoVentaSelect").value = "";
+    document.getElementById("monedaSelect").value = "";
+    document.getElementById("alertaEstado").style.display = "none";
+    document.getElementById("btnGuardarFactura").style.display = "inline-block";
+    document.getElementById("btnActualizarFactura").style.display = "none";
+    document.getElementById("btnAnularFactura").style.display = "none";
+    document.getElementById("btnEliminarFactura").style.display = "none";
+    bloquearControles(false);
+    actualizarTablaUI();
 }
