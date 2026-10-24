@@ -29,7 +29,6 @@ import java.util.List;
 @ToString(exclude = {"observaciones"})
 public class FacturaRequestDTO {
 
-    @NotNull(message = "El numero de factura es obligatorio")
     private Long numero;
 
     @NotNull(message = "La fecha de emision es obligatoria")

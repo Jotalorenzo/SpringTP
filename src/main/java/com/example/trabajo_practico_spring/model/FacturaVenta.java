@@ -27,11 +27,11 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@EqualsAndHashCode(callSuper = true, exclude = {"detalles"})
-@ToString(exclude = {"detalles", "observaciones", "motivoRechazo"})
+@EqualsAndHashCode(callSuper = true, exclude = { "detalles" })
+@ToString(exclude = { "detalles", "observaciones", "motivoRechazo" })
 public class FacturaVenta extends AuditoriaApp {
 
-    @Column(name = "numero", nullable = false)
+    @Column(name = "numero")
     private Long numero;
 
     @Column(name = "fecha_emision", nullable = false)
