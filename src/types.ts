@@ -1,74 +1,53 @@
-// ==========================================
-// DTOs de Dominio / Entidades Auxiliares
-// ==========================================
-
 export interface ClienteDTO {
-    id: number;
-    razonSocial?: string;
-    nombre?: string;
-    cuit?: string;
+  id: number;
+  cuitCuil?: string;
+  denominacion?: string;
 }
 
 export interface ArticuloDTO {
-    id: number;
-    codigo?: string;
-    denominacion?: string;
-    precioVenta?: number;
+  id: number;
+  codigo?: string;
+  denominacion?: string;
 }
 
 export interface PuntoVentaDTO {
-    id: number;
-    numero: number;
-    denominacion?: string;
+  id: number;
+  numero: number;
+  descripcion?: string;
 }
 
 export interface TipoMonedaDTO {
-    id: number;
-    nombre: string;
-    simbolo?: string;
+  id: number;
+  codigoAfip?: string;
+  denominacion: string;
+  simbolo?: string;
 }
-
-export interface ListaPrecioDTO {
-    id: number;
-    nombre: string;
-}
-
-// ==========================================
-// DTOs de Solicitud (Request Payload)
-// ==========================================
 
 export interface FacturaDetalleRequestDTO {
-    articuloId: number;
-    cantidad: number;
-    precioUnitario?: number;
+  articuloId: number;
+  cantidad: number;
+  descripcion?: string;
+  porcentajeBonificacion?: number;
 }
 
 export interface FacturaRequestDTO {
-    clienteId: number;
-    puntoVentaId: number;
-    tipoMonedaId: number;
-    listaPrecioId?: number;
-    detalles: FacturaDetalleRequestDTO[];
+  numero: number;
+  fechaEmision: string; // formato YYYY-MM-DD
+  puntoVentaId: number;
+  condicionIvaId: number;
+  tipoMonedaId: number;
+  clienteId?: number | null;
+  estado?: string;
+  observaciones?: string;
+  detalles: FacturaDetalleRequestDTO[];
 }
 
-// ==========================================
-// DTOs de Respuesta (Response Payload)
-// ==========================================
-
-export interface FacturaVentaDetalleDTO {
-    id?: number;
-    articulo: ArticuloDTO;
-    cantidad: number;
-    precioUnitario: number;
-    subtotal: number;
-}
-
-export interface FacturaVentaDTO {
-    id: number;
-    numeroFactura?: string;
-    fecha?: string;
-    cliente: ClienteDTO;
-    puntoVenta: PuntoVentaDTO;
-    total: number;
-    detalles: FacturaVentaDetalleDTO[];
+export interface FacturaReporteDTO {
+  numeroFactura: number;
+  fechaEmision: string;
+  clienteDenominacion: string;
+  condicionIva: string;
+  puntoVentaDescripcion: string;
+  importeTotal: number;
+  cantidadItems: number;
 }

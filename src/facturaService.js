@@ -1,22 +1,22 @@
-// Ajusta el puerto y prefijo según la configuración de tu Spring Boot (application.properties)
-const API_URL = 'http://localhost:8080/api/facturas';
+// URL base limpia (sin duplicar /facturas)
+const API_URL = "http://localhost:8080/api/facturas";
 export const facturaService = {
-    // 1. Enviar la factura al backend
+    // 1. Enviar la factura al backend (POST http://localhost:8080/api/facturas)
     crearFactura: async (facturaReq) => {
-        const response = await fetch(`${API_URL}`, {
-            method: 'POST',
+        const response = await fetch(API_URL, {
+            method: "POST",
             headers: {
-                'Content-Type': 'application/json',
+                "Content-Type": "application/json",
             },
             body: JSON.stringify(facturaReq),
         });
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(`Error al crear factura: ${errorData.message || response.statusText}`);
+            throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
         }
         return response.json();
     },
-    // 2. Obtener datos paramétricos para armar el formulario UI
+    // 2. Obtener datos paramétricos
     obtenerClientes: async () => {
         const response = await fetch(`${API_URL}/clientes`);
         return response.ok ? response.json() : [];
@@ -32,5 +32,5 @@ export const facturaService = {
     obtenerTiposMoneda: async () => {
         const response = await fetch(`${API_URL}/tipos-moneda`);
         return response.ok ? response.json() : [];
-    }
+    },
 };
