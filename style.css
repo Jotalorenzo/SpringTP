@@ -131,6 +131,8 @@ button:disabled {
 .btn-warning { background: var(--warning); color: white; }
 .btn-warning:hover:not(:disabled) { background: var(--warning-hover); }
 
+.btn-arca { background: #047857; color: white; }
+.btn-arca:hover:not(:disabled) { background: #065f46; }
 .btn-outline {
   background: #ffffff;
   border-color: #cbd5e1;

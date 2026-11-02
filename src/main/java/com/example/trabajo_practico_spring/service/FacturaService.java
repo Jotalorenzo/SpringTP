@@ -23,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 @Service
@@ -41,6 +42,8 @@ public class FacturaService {
     private final ClienteRepository clienteRepository;
     private final ListaPrecioArticuloRepository listaPrecioArticuloRepository;
     private final AuditoriaService auditoria;
+    private final AfipWsaaService afipWsaaService;
+    private final AfipWsfeService afipWsfeService;
 
     @Transactional(readOnly = true)
     public List<FacturaReporteDTO> buscarFacturasFiltradas(LocalDate fechaDesde, LocalDate fechaHasta, String estado, Double montoMinimo) {
@@ -128,6 +131,42 @@ public class FacturaService {
         facturaVentaRepository.delete(factura);
     }
 
+    /**
+     * Informa la factura a ARCA/AFIP (homologación).
+     * Llama WSAA -> obtiene token+sign, luego WSFE -> obtiene CAE.
+     * Guarda CAE, fecha de vencimiento y estado "AUTORIZADA" en la factura.
+     */
+    @Transactional
+    public FacturaReporteDTO informarArca(Long id) throws Exception {
+        FacturaVenta factura = buscarFactura(id);
+
+        if (ESTADO_ANULADA.equalsIgnoreCase(factura.getEstado())) {
+            throw new OperacionNoPermitidaException("No se puede informar a ARCA una factura ANULADA.");
+        }
+        if (factura.getCae() != null && !factura.getCae().isBlank()) {
+            throw new OperacionNoPermitidaException("La factura ya fue informada a ARCA (CAE: " + factura.getCae() + ").");
+        }
+
+        String[] tokenSign = afipWsaaService.obtenerTokenYSign();
+        String token = tokenSign[0];
+        String sign  = tokenSign[1];
+
+        String fechaEmision = factura.getFechaEmision()
+                .format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+
+        AfipWsfeService.ResultadoCae resultado = afipWsfeService.solicitarCae(
+                token, sign, factura.getImporteTotal(), fechaEmision);
+
+        factura.setCae(resultado.cae());
+        factura.setCaeFechaVencimiento(resultado.fechaVencimiento());
+        factura.setResultadoAfip("A");
+        factura.setNumero(resultado.nroComprobante());
+        factura.setEstado("AUTORIZADA");
+        auditoria.completarModificacion(factura);
+
+        return aReporteDto(facturaVentaRepository.save(factura));
+    }
+
     private FacturaVenta buscarFactura(Long id) {
         return facturaVentaRepository.findById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Factura", id));
@@ -190,14 +229,18 @@ public class FacturaService {
     }
 
     private FacturaReporteDTO aReporteDto(FacturaVenta f) {
-        return new FacturaReporteDTO(
+        FacturaReporteDTO dto = new FacturaReporteDTO(
+                f.getId(),
                 f.getNumero(),
                 f.getFechaEmision(),
                 f.getCliente() == null ? "Consumidor Final" : f.getCliente().getDenominacion(),
                 f.getCondicionIva().getDenominacion(),
                 f.getPuntoVenta().getDescripcion(),
                 f.getImporteTotal(),
-                f.getDetalles().size());
+                f.getDetalles().size(),
+                f.getEstado(),
+                f.getCae());
+        return dto;
     }
 
     private FacturaVentaDTO aDetalleDto(FacturaVenta f) {

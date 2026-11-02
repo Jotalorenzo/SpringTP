@@ -55,6 +55,9 @@ function configurarEventos() {
         .getElementById("btnImprimirPdf")
         ?.addEventListener("click", imprimirFacturaPdf);
     document
+        .getElementById("btnInformarArca")
+        ?.addEventListener("click", informarArcaFactura);
+    document
         .getElementById("btnNuevaFactura")
         ?.addEventListener("click", resetearAModoNuevo);
     // Eventos de la Grilla y Filtros
@@ -323,6 +326,28 @@ async function imprimirFacturaPdf() {
         return;
     window.imprimirPdfDirecto(facturaCargadaActual.id);
 }
+async function informarArcaFactura() {
+    if (!facturaCargadaActual)
+        return;
+    if (!confirm(`¿Informar la factura ID #${facturaCargadaActual.id} a ARCA/AFIP?\nEsta acción solicitará el CAE en el entorno de homologación.`))
+        return;
+    const btn = document.getElementById("btnInformarArca");
+    btn.disabled = true;
+    btn.textContent = "Informando...";
+    try {
+        const resultado = await facturaService.informarArca(facturaCargadaActual.id);
+        alert(`¡CAE obtenido!\nCAE: ${resultado.cae}\nVence: ${resultado.caeFechaVencimiento || "Ver detalle"}`);
+        await window.cargarFacturaPorId(facturaCargadaActual.id);
+        await cargarGrilla();
+    }
+    catch (error) {
+        alert(`Error: ${error.message}`);
+    }
+    finally {
+        btn.disabled = false;
+        btn.textContent = "🏛️ Informar a ARCA";
+    }
+}
 function aplicarReglasDeNegocioVisuales(f) {
     const alerta = document.getElementById("alertaEstado");
     const btnGuardar = document.getElementById("btnGuardarFactura");
@@ -330,6 +355,7 @@ function aplicarReglasDeNegocioVisuales(f) {
     const btnAnular = document.getElementById("btnAnularFactura");
     const btnEliminar = document.getElementById("btnEliminarFactura");
     const btnImprimir = document.getElementById("btnImprimirPdf");
+    const btnArca = document.getElementById("btnInformarArca");
     const btnNuevo = document.getElementById("btnNuevaFactura");
     btnGuardar.style.display = "none";
     btnImprimir.style.display = "inline-block";
@@ -344,6 +370,7 @@ function aplicarReglasDeNegocioVisuales(f) {
         btnActualizar.style.display = "none";
         btnAnular.style.display = "none";
         btnEliminar.style.display = "none";
+        btnArca.style.display = "none";
         bloquearControles(true);
     }
     else if (tieneCae) {
@@ -352,6 +379,7 @@ function aplicarReglasDeNegocioVisuales(f) {
         btnActualizar.style.display = "none";
         btnEliminar.style.display = "none";
         btnAnular.style.display = "inline-block";
+        btnArca.style.display = "none";
         bloquearControles(true);
     }
     else if (tieneNumero) {
@@ -360,6 +388,7 @@ function aplicarReglasDeNegocioVisuales(f) {
         btnActualizar.style.display = "inline-block";
         btnAnular.style.display = "inline-block";
         btnEliminar.style.display = "none";
+        btnArca.style.display = "inline-block";
         bloquearControles(false);
     }
     else {
@@ -368,6 +397,7 @@ function aplicarReglasDeNegocioVisuales(f) {
         btnActualizar.style.display = "inline-block";
         btnEliminar.style.display = "inline-block";
         btnAnular.style.display = "none";
+        btnArca.style.display = "inline-block";
         bloquearControles(false);
     }
     actualizarTablaUI();
@@ -405,6 +435,7 @@ function resetearAModoNuevo() {
     document.getElementById("btnAnularFactura").style.display = "none";
     document.getElementById("btnEliminarFactura").style.display = "none";
     document.getElementById("btnImprimirPdf").style.display = "none";
+    document.getElementById("btnInformarArca").style.display = "none";
     document.getElementById("btnNuevaFactura").style.display = "none";
     bloquearControles(false);
     actualizarTablaUI();

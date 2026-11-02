@@ -199,6 +199,25 @@ public class FacturaRestController {
     }
 
     /**
+     * PUT /api/facturas/{id}/informar-arca
+     * Envía la factura a ARCA/AFIP (homologación) para obtener el CAE.
+     * Actualiza número, CAE, fecha de vencimiento y estado = "AUTORIZADA".
+     */
+    @PutMapping("/{id}/informar-arca")
+    public ResponseEntity<?> informarArca(@PathVariable Long id) {
+        try {
+            FacturaReporteDTO resultado = facturaService.informarArca(id);
+            return ResponseEntity.ok(resultado);
+        } catch (com.example.trabajo_practico_spring.exception.OperacionNoPermitidaException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(java.util.Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(java.util.Map.of("error", "Error al comunicarse con ARCA: " + e.getMessage()));
+        }
+    }
+
+    /**
      * GET /api/facturas/{id}/pdf Descarga la Factura Individual Legal con CAE y
      * Vencimiento en formato PDF.
      */
