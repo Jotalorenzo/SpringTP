@@ -1,4 +1,4 @@
-﻿package com.example.trabajo_practico_spring.service;
+package com.example.trabajo_practico_spring.service;
 
 import com.example.trabajo_practico_spring.config.AfipProperties;
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
