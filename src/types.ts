@@ -65,6 +65,7 @@ export interface FacturaVentaDetalleDTO {
   id?: number;
   articuloId: number;
   articuloDenominacion: string;
+  descripcion?: string; 
   cantidad: number;
   precioUnitario: number;
   importeSubtotal: number;

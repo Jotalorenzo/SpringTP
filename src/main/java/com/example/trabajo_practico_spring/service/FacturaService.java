@@ -132,9 +132,9 @@ public class FacturaService {
     }
 
     /**
-     * Informa la factura a ARCA/AFIP (homologación).
-     * Llama WSAA -> obtiene token+sign, luego WSFE -> obtiene CAE.
-     * Guarda CAE, fecha de vencimiento y estado "AUTORIZADA" en la factura.
+     * Informa la factura a ARCA/AFIP (homologación). Llama WSAA -> obtiene
+     * token+sign, luego WSFE -> obtiene CAE. Guarda CAE, fecha de vencimiento y
+     * estado "AUTORIZADA" en la factura.
      */
     @Transactional
     public FacturaReporteDTO informarArca(Long id) throws Exception {
@@ -149,13 +149,21 @@ public class FacturaService {
 
         String[] tokenSign = afipWsaaService.obtenerTokenYSign();
         String token = tokenSign[0];
-        String sign  = tokenSign[1];
+        String sign = tokenSign[1];
 
         String fechaEmision = factura.getFechaEmision()
                 .format(DateTimeFormatter.ofPattern("yyyyMMdd"));
 
+        Long cuitCliente = null;
+        if (factura.getCliente() != null && factura.getCliente().getCuitCuil() != null) {
+            try {
+                cuitCliente = Long.parseLong(factura.getCliente().getCuitCuil().replaceAll("[^0-9]", ""));
+            } catch (Exception ignored) {
+            }
+        }
+
         AfipWsfeService.ResultadoCae resultado = afipWsfeService.solicitarCae(
-                token, sign, factura.getImporteTotal(), fechaEmision);
+                token, sign, factura.getImporteTotal(), fechaEmision, cuitCliente);
 
         factura.setCae(resultado.cae());
         factura.setCaeFechaVencimiento(resultado.fechaVencimiento());

@@ -136,4 +136,17 @@ export const facturaService = {
     if (!response.ok) throw new Error("Error al consultar las facturas.");
     return response.json();
   },
+
+  // Agregar en facturaService dentro de SpringTP/src/facturaService.ts:
+  informarArca: async (id: number): Promise<FacturaReporteDTO> => {
+    const response = await fetch(`${API_URL}/${id}/informar-arca`, {
+      method: "PUT",
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || errorData.message || `Error al informar a ARCA`);
+    }
+    return response.json();
+  },
 };

@@ -24,6 +24,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
@@ -33,13 +34,16 @@ import java.util.Collections;
 @Service
 public class AfipWsaaService {
 
-    private static final String URL_WSAA_HOMO =
-            "https://wsaahomo.afip.gov.ar/ws/services/LoginCms";
-
-    private static final DateTimeFormatter AFIP_FMT =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX");
+    private static final String URL_WSAA_HOMO = "https://wsaahomo.afip.gov.ar/ws/services/LoginCms";
+    private static final ZoneId ZONA_ARG = ZoneId.of("America/Argentina/Buenos_Aires");
+    private static final DateTimeFormatter AFIP_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX");
 
     private final AfipProperties props;
+
+    // Caché en memoria para no saturar AFIP
+    private String tokenCache = null;
+    private String signCache = null;
+    private ZonedDateTime expirationCache = null;
 
     public AfipWsaaService(AfipProperties props) {
         this.props = props;
@@ -53,36 +57,51 @@ public class AfipWsaaService {
         try {
             TrustManager[] trustAll = new TrustManager[]{
                 new X509TrustManager() {
-                    public java.security.cert.X509Certificate[] getAcceptedIssuers() { return null; }
-                    public void checkClientTrusted(java.security.cert.X509Certificate[] c, String a) {}
-                    public void checkServerTrusted(java.security.cert.X509Certificate[] c, String a) {}
+                    public X509Certificate[] getAcceptedIssuers() { return null; }
+                    public void checkClientTrusted(X509Certificate[] c, String a) {}
+                    public void checkServerTrusted(X509Certificate[] c, String a) {}
                 }
             };
             SSLContext sc = SSLContext.getInstance("TLS");
-            sc.init(null, trustAll, new java.security.SecureRandom());
+            sc.init(null, trustAll, new SecureRandom());
             HttpsURLConnection.setDefaultSSLSocketFactory(sc.getSocketFactory());
             HttpsURLConnection.setDefaultHostnameVerifier((hostname, session) -> true);
         } catch (Exception ignored) {}
     }
 
-    public String[] obtenerTokenYSign() throws Exception {
+    /**
+     * Obtiene Token y Sign. Si el token actual sigue vigente, lo devuelve de la memoria.
+     */
+    public synchronized String[] obtenerTokenYSign() throws Exception {
+        ZonedDateTime ahora = ZonedDateTime.now(ZONA_ARG);
+        if (tokenCache != null && signCache != null && expirationCache != null && ahora.isBefore(expirationCache.minusMinutes(5))) {
+            return new String[]{tokenCache, signCache};
+        }
+
         PrivateKey privateKey = cargarClavePrivada(props.getKeyPath());
-        X509Certificate cert  = cargarCertificado(props.getCertPath());
-        String traXml    = construirTra();
+        X509Certificate cert = cargarCertificado(props.getCertPath());
+        String traXml = construirTra();
         String cmsBase64 = firmarTra(traXml, privateKey, cert);
-        String response  = enviarSoap(URL_WSAA_HOMO, construirSoapEnvelope(cmsBase64));
-        return extraerTokenYSign(response);
+        String response = enviarSoap(URL_WSAA_HOMO, construirSoapEnvelope(cmsBase64));
+
+        String[] credenciales = extraerTokenYSign(response);
+        this.tokenCache = credenciales[0];
+        this.signCache = credenciales[1];
+        this.expirationCache = ahora.plusHours(10); // Expira en 12h, dejamos 10h por seguridad
+
+        return credenciales;
     }
 
     private String construirTra() {
-        ZonedDateTime now = ZonedDateTime.now().truncatedTo(ChronoUnit.SECONDS);
+        ZonedDateTime now = ZonedDateTime.now(ZONA_ARG).truncatedTo(ChronoUnit.SECONDS);
+        // Margen de 10 minutos antes y después para compensar desfases de reloj
         String genTime = now.minusMinutes(10).format(AFIP_FMT);
         String expTime = now.plusMinutes(10).format(AFIP_FMT);
-        long uniqueId  = System.currentTimeMillis() / 1000;
+        long uniqueId = System.currentTimeMillis() / 1000;
+
         return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
                 + "<loginTicketRequest version=\"1.0\">"
                 + "<header>"
-                + "<destination>cn=wsaahomo,o=afip,c=ar,serialNumber=CUIT 33693450239</destination>"
                 + "<uniqueId>" + uniqueId + "</uniqueId>"
                 + "<generationTime>" + genTime + "</generationTime>"
                 + "<expirationTime>" + expTime + "</expirationTime>"
@@ -122,9 +141,11 @@ public class AfipWsaaService {
         conn.setConnectTimeout(15_000);
         conn.setReadTimeout(15_000);
         conn.setDoOutput(true);
+
         try (OutputStream os = conn.getOutputStream()) {
             os.write(soapXml.getBytes(StandardCharsets.UTF_8));
         }
+
         int status = conn.getResponseCode();
         InputStream is = (status < 400) ? conn.getInputStream() : conn.getErrorStream();
         try (BufferedReader br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
@@ -132,38 +153,52 @@ public class AfipWsaaService {
             String line;
             while ((line = br.readLine()) != null) sb.append(line.trim());
             String response = sb.toString();
-            if (status >= 400) throw new RuntimeException("WSAA respondio HTTP " + status + ": " + response);
+            if (status >= 400 || response.contains("<faultstring>")) {
+                throw new RuntimeException("WSAA Error (" + status + "): " + response);
+            }
             return response;
         }
     }
 
     private String[] extraerTokenYSign(String xmlResponse) {
         String xml = xmlResponse.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&");
-        if (!xml.contains("<token>")) throw new RuntimeException("Error en respuesta WSAA: " + xmlResponse);
+        if (!xml.contains("<token>")) {
+            throw new RuntimeException("Error en respuesta WSAA: " + xmlResponse);
+        }
         return new String[]{extraerTag(xml, "token"), extraerTag(xml, "sign")};
     }
 
     private String extraerTag(String xml, String tag) {
         int inicio = xml.indexOf("<" + tag + ">") + tag.length() + 2;
-        int fin    = xml.indexOf("</" + tag + ">");
-        if (inicio < tag.length() + 2 || fin < 0)
+        int fin = xml.indexOf("</" + tag + ">");
+        if (inicio < tag.length() + 2 || fin < 0) {
             throw new RuntimeException("Tag <" + tag + "> no encontrado en respuesta WSAA");
+        }
         return xml.substring(inicio, fin);
     }
 
     private PrivateKey cargarClavePrivada(String path) throws Exception {
-        try (FileReader fr = new FileReader(path); PEMParser pemParser = new PEMParser(fr)) {
+        File file = new File(path);
+        if (!file.exists()) {
+            throw new FileNotFoundException("No se encontró la clave privada en la ruta: " + file.getAbsolutePath());
+        }
+        try (Reader reader = new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8);
+             PEMParser pemParser = new PEMParser(reader)) {
             Object parsed = pemParser.readObject();
             JcaPEMKeyConverter converter = new JcaPEMKeyConverter().setProvider("BC");
-            if (parsed instanceof PEMKeyPair) return converter.getKeyPair((PEMKeyPair) parsed).getPrivate();
-            else if (parsed instanceof PrivateKeyInfo) return converter.getPrivateKey((PrivateKeyInfo) parsed);
-            else if (parsed instanceof PrivateKey) return (PrivateKey) parsed;
-            else throw new IllegalArgumentException("Formato de clave no reconocido: " + path);
+            if (parsed instanceof PEMKeyPair pkp) return converter.getKeyPair(pkp).getPrivate();
+            if (parsed instanceof PrivateKeyInfo pki) return converter.getPrivateKey(pki);
+            if (parsed instanceof PrivateKey pk) return pk;
+            throw new IllegalArgumentException("Formato de clave privada no soportado en: " + path);
         }
     }
 
     private X509Certificate cargarCertificado(String path) throws Exception {
-        try (FileInputStream fis = new FileInputStream(path)) {
+        File file = new File(path);
+        if (!file.exists()) {
+            throw new FileNotFoundException("No se encontró el certificado en la ruta: " + file.getAbsolutePath());
+        }
+        try (FileInputStream fis = new FileInputStream(file)) {
             return (X509Certificate) CertificateFactory.getInstance("X.509").generateCertificate(fis);
         }
     }

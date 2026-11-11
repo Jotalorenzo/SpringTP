@@ -73,16 +73,6 @@ export const facturaService = {
         }
         return response.blob();
     },
-    informarArca: async (id) => {
-        const response = await fetch(`${API_URL}/${id}/informar-arca`, {
-            method: "PUT",
-        });
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error || `Error al informar a ARCA: ${response.statusText}`);
-        }
-        return response.json();
-    },
     buscarFacturasPaginadas: async (filtros) => {
         const params = new URLSearchParams();
         if (filtros.numeroFactura)
@@ -102,6 +92,17 @@ export const facturaService = {
         const response = await fetch(`${API_URL}?${params.toString()}`);
         if (!response.ok)
             throw new Error("Error al consultar las facturas.");
+        return response.json();
+    },
+    // Agregar en facturaService dentro de SpringTP/src/facturaService.ts:
+    informarArca: async (id) => {
+        const response = await fetch(`${API_URL}/${id}/informar-arca`, {
+            method: "PUT",
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || errorData.message || `Error al informar a ARCA`);
+        }
         return response.json();
     },
 };

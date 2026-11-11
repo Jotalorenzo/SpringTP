@@ -1,3 +1,5 @@
+package com.example.trabajo_practico_spring.service;
+
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;

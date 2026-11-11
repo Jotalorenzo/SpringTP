@@ -2,14 +2,13 @@ package com.example.trabajo_practico_spring.service;
 
 import com.example.trabajo_practico_spring.config.AfipProperties;
 
-
 public class TestWsaaMain {
 
     public static void main(String[] args) throws Exception {
         AfipProperties props = new AfipProperties();
-        props.setCuit(20416432377L);
-        props.setCertPath("C:/Users/pedro/OneDrive/Desktop/utn/SpringTP-main/certs/testspringtp_34954245e2b90f8d.crt");
-        props.setKeyPath("C:/Users/pedro/OneDrive/Desktop/utn/SpringTP-main/certs/privada_test.key");
+        props.setCuit(20421683817L);
+        props.setCertPath("certs/certificado_mi_cuit.crt");
+        props.setKeyPath("certs/privada_mi_cuit.key");
         props.setPuntoVenta(2);
 
         AfipWsaaService wsaa = new AfipWsaaService(props);

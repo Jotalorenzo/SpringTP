@@ -5,10 +5,6 @@ import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
-/**
- * Propiedades de conexión con ARCA/AFIP leídas desde application.properties.
- * Prefijo: afip
- */
 @Component
 @ConfigurationProperties(prefix = "afip")
 @Getter
@@ -18,12 +14,15 @@ public class AfipProperties {
     /** CUIT del contribuyente habilitado en homologación. */
     private long cuit;
 
-    /** Ruta absoluta al archivo .crt (certificado digital). */
+    /** Ruta al archivo .crt (certificado digital). */
     private String certPath;
 
-    /** Ruta absoluta al archivo .key (clave privada RSA). */
+    /** Ruta al archivo .key (clave privada RSA). */
     private String keyPath;
 
     /** Punto de venta configurado en AFIP (homologación). */
     private int puntoVenta = 2;
+
+    /** Tipo de comprobante: 11 = Factura C, 1 = Factura A, 6 = Factura B */
+    private int cbteTipo = 11;
 }
