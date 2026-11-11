@@ -1,442 +1,291 @@
-import { facturaService } from "./facturaService.js";
+import { facturaService } from './facturaService.js';
+// Estado local de la factura en memoria
 let detallesActuales = [];
-let facturaCargadaActual = null;
-let paginaActual = 0;
-const tamanioPagina = 5;
-document.addEventListener("DOMContentLoaded", async () => {
+document.addEventListener('DOMContentLoaded', async () => {
     await inicializarFormulario();
     configurarEventos();
-    await cargarGrilla();
 });
 async function inicializarFormulario() {
     try {
+        // Carga en paralelo optimizada
         const [clientes, puntosVenta, monedas, articulos] = await Promise.all([
             facturaService.obtenerClientes(),
             facturaService.obtenerPuntosVenta(),
             facturaService.obtenerTiposMoneda(),
-            facturaService.obtenerArticulos(),
+            facturaService.obtenerArticulos()
         ]);
-        llenarSelect("clienteSelect", clientes, "id", "denominacion");
-        llenarSelect("puntoVentaSelect", puntosVenta, "id", "descripcion");
-        llenarSelect("monedaSelect", monedas, "id", "denominacion");
-        llenarSelect("articuloSelect", articulos, "id", "denominacion");
+        llenarSelect('clienteSelect', clientes, 'id', 'denominacion');
+        llenarSelect('puntoVentaSelect', puntosVenta, 'id', 'descripcion');
+        llenarSelect('monedaSelect', monedas, 'id', 'denominacion');
+        llenarSelect('articuloSelect', articulos, 'id', 'denominacion');
+        convertirSelectEnBuscable('clienteSelect', 'Buscar y seleccionar cliente...');
+        convertirSelectEnBuscable('articuloSelect', 'Buscar y seleccionar artículo...');
     }
     catch (error) {
         console.error("Error al cargar paramétricas:", error);
+        alert("Hubo un error al conectar con el servidor para cargar los datos.");
     }
 }
 function llenarSelect(selectId, items, valueProp, textProp) {
     const select = document.getElementById(selectId);
     select.innerHTML = '<option value="">Seleccione una opción...</option>';
-    items.forEach((item) => {
-        const option = document.createElement("option");
+    items.forEach(item => {
+        const option = document.createElement('option');
         option.value = item[valueProp];
         option.textContent = item[textProp] || `ID: ${item[valueProp]}`;
         select.appendChild(option);
     });
 }
 function configurarEventos() {
-    document
-        .getElementById("btnAgregarLinea")
-        ?.addEventListener("click", agregarLinea);
-    document
-        .getElementById("btnGuardarFactura")
-        ?.addEventListener("click", crearFactura);
-    document
-        .getElementById("btnActualizarFactura")
-        ?.addEventListener("click", actualizarFactura);
-    document
-        .getElementById("btnAnularFactura")
-        ?.addEventListener("click", anularFactura);
-    document
-        .getElementById("btnEliminarFactura")
-        ?.addEventListener("click", eliminarFactura);
-    document
-        .getElementById("btnImprimirPdf")
-        ?.addEventListener("click", imprimirFacturaPdf);
-    document
-        .getElementById("btnInformarArca")
-        ?.addEventListener("click", informarArcaFactura);
-    document
-        .getElementById("btnNuevaFactura")
-        ?.addEventListener("click", resetearAModoNuevo);
-    // Eventos de la Grilla y Filtros
-    document.getElementById("btnFiltrar")?.addEventListener("click", () => {
-        paginaActual = 0;
-        cargarGrilla();
-    });
-    document
-        .getElementById("btnLimpiarFiltros")
-        ?.addEventListener("click", limpiarFiltros);
-    document
-        .getElementById("btnPaginaAnterior")
-        ?.addEventListener("click", () => {
-        if (paginaActual > 0) {
-            paginaActual--;
-            cargarGrilla();
-        }
-    });
-    document
-        .getElementById("btnPaginaSiguiente")
-        ?.addEventListener("click", () => {
-        paginaActual++;
-        cargarGrilla();
-    });
+    document.getElementById('btnAgregarLinea')?.addEventListener('click', agregarLinea);
+    document.getElementById('btnGuardarFactura')?.addEventListener('click', enviarFactura);
 }
-// ==========================================
-// LÓGICA DE LA GRILLA Y FILTROS
-// ==========================================
-async function cargarGrilla() {
-    const nroVal = document.getElementById("filtroNumero")
-        .value;
-    const clienteVal = document.getElementById("filtroCliente").value;
-    const fechaDesdeVal = document.getElementById("filtroFechaDesde").value;
-    const fechaHastaVal = document.getElementById("filtroFechaHasta").value;
-    const estadoVal = document.getElementById("filtroEstado").value;
-    const arcaVal = document.getElementById("filtroArca")
-        .value;
-    const filtros = {
-        page: paginaActual,
-        size: tamanioPagina,
-    };
-    if (nroVal)
-        filtros.numeroFactura = parseInt(nroVal);
-    if (clienteVal)
-        filtros.cliente = clienteVal;
-    if (fechaDesdeVal)
-        filtros.fechaDesde = fechaDesdeVal;
-    if (fechaHastaVal)
-        filtros.fechaHasta = fechaHastaVal;
-    if (estadoVal)
-        filtros.estado = estadoVal;
-    if (arcaVal !== "")
-        filtros.informadaArca = arcaVal === "true";
-    try {
-        const respuesta = await facturaService.buscarFacturasPaginadas(filtros);
-        renderizarGrilla(respuesta.contenido);
-        // Actualizar barra de paginación
-        document.getElementById("infoPaginacion").textContent =
-            `Página ${respuesta.pagina + 1} de ${respuesta.totalPaginas || 1} (Total: ${respuesta.totalElementos} facturas)`;
-        document.getElementById("btnPaginaAnterior").disabled = respuesta.pagina === 0;
-        document.getElementById("btnPaginaSiguiente").disabled = respuesta.pagina >= respuesta.totalPaginas - 1;
-    }
-    catch (error) {
-        console.error(error);
-    }
-}
-function renderizarGrilla(facturas) {
-    const tbody = document.querySelector("#tablaGrillaFacturas tbody");
-    tbody.innerHTML = "";
-    if (facturas.length === 0) {
-        tbody.innerHTML =
-            '<tr><td colspan="8" style="text-align: center; color: #94a3b8;">No se encontraron facturas con los filtros seleccionados.</td></tr>';
-        return;
-    }
-    facturas.forEach((f) => {
-        const tr = document.createElement("tr");
-        const tieneCae = f.cae && f.cae.trim().length > 0;
-        const esAnulada = f.estado === "ANULADA";
-        tr.innerHTML = `
-            <td><strong>#${f.id}</strong></td>
-            <td>${f.numeroFactura || "<em>Borrador</em>"}</td>
-            <td>${f.fechaEmision}</td>
-            <td>${f.clienteDenominacion}</td>
-            <td>$${f.importeTotal.toFixed(2)}</td>
-            <td>${esAnulada ? '<span class="tag-anulada">ANULADA</span>' : '<span style="color:#0369a1; font-weight:600;">EMITIDA</span>'}</td>
-            <td>${tieneCae ? '<span class="tag-arca">ARCA</span>' : '<span class="tag-no-arca">Sin CAE</span>'}</td>
-            <td>
-                <button type="button" class="btn-outline" style="padding: 4px 8px; font-size: 12px;" onclick="cargarFacturaPorId(${f.id})">Ver / Editar</button>
-                <button type="button" class="btn-outline" style="padding: 4px 8px; font-size: 12px;" onclick="imprimirPdfDirecto(${f.id})">📄 PDF</button>
-            </td>
-        `;
-        tbody.appendChild(tr);
-    });
-}
-function limpiarFiltros() {
-    document.getElementById("filtroNumero").value = "";
-    document.getElementById("filtroCliente").value = "";
-    document.getElementById("filtroFechaDesde").value = "";
-    document.getElementById("filtroFechaHasta").value = "";
-    document.getElementById("filtroEstado").value = "";
-    document.getElementById("filtroArca").value = "";
-    paginaActual = 0;
-    cargarGrilla();
-}
-// Hacemos globales las funciones para los botones de la grilla
-window.cargarFacturaPorId = async (id) => {
-    try {
-        const f = await facturaService.obtenerFacturaPorId(id);
-        facturaCargadaActual = f;
-        document.getElementById("numeroFacturaInput").value =
-            f.numero ? f.numero.toString() : "";
-        document.getElementById("clienteSelect").value =
-            f.clienteId ? f.clienteId.toString() : "";
-        document.getElementById("puntoVentaSelect").value =
-            f.puntoVentaId.toString();
-        document.getElementById("monedaSelect").value =
-            f.tipoMonedaId.toString();
-        detallesActuales = f.detalles.map((d) => ({
-            articuloId: d.articuloId,
-            cantidad: d.cantidad,
-            porcentajeBonificacion: 0.0,
-        }));
-        document.getElementById("tituloFormulario").textContent =
-            `Modificando Factura #${f.id}`;
-        aplicarReglasDeNegocioVisuales(f);
-        // Desplazar la vista al formulario
-        document
-            .getElementById("seccionFormulario")
-            ?.scrollIntoView({ behavior: "smooth" });
-    }
-    catch (error) {
-        alert(error.message);
-    }
-};
-window.imprimirPdfDirecto = async (id) => {
-    try {
-        const blob = await facturaService.descargarFacturaIndividualPdf(id);
-        const fileUrl = URL.createObjectURL(blob);
-        window.open(fileUrl, "_blank");
-    }
-    catch (error) {
-        alert(error.message);
-    }
-};
-// ==========================================
-// DETALLES Y FORMULARIO
-// ==========================================
 function agregarLinea() {
-    const articuloSelect = document.getElementById("articuloSelect");
-    const cantidadInput = document.getElementById("cantidadInput");
+    const articuloSelect = document.getElementById('articuloSelect');
+    const cantidadInput = document.getElementById('cantidadInput');
     const articuloId = parseInt(articuloSelect.value);
-    const cantidad = parseFloat(cantidadInput.value);
+    const cantidad = parseInt(cantidadInput.value);
     if (isNaN(articuloId) || isNaN(cantidad) || cantidad <= 0) {
-        alert("Seleccione un artículo y cantidad mayor a 0.");
+        alert("Seleccione un artículo válido y una cantidad mayor a 0.");
         return;
     }
-    detallesActuales.push({ articuloId, cantidad, porcentajeBonificacion: 0.0 });
+    // Agregar al estado
+    detallesActuales.push({
+        articuloId: articuloId,
+        cantidad: cantidad
+    });
     actualizarTablaUI();
 }
 function actualizarTablaUI() {
-    const tbody = document.querySelector("#tablaDetalles tbody");
-    tbody.innerHTML = "";
-    const bloqueado = facturaCargadaActual &&
-        (facturaCargadaActual.cae || facturaCargadaActual.estado === "ANULADA");
+    const tbody = document.querySelector('#tablaDetalles tbody');
+    tbody.innerHTML = ''; // Limpiar
     detallesActuales.forEach((detalle, index) => {
-        const tr = document.createElement("tr");
+        const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${detalle.articuloId}</td>
             <td>${detalle.cantidad}</td>
-            <td>${bloqueado ? "—" : `<button type="button" class="btn-outline" style="padding: 4px 8px;" onclick="eliminarLinea(${index})">Quitar</button>`}</td>
+            <td><button onclick="eliminarLinea(${index})">Eliminar</button></td>
         `;
         tbody.appendChild(tr);
     });
 }
+// Hacemos la función global para que pueda ser llamada desde el onclick del HTML generado
 window.eliminarLinea = (index) => {
     detallesActuales.splice(index, 1);
     actualizarTablaUI();
 };
-function armarPayload() {
-    const clienteId = parseInt(document.getElementById("clienteSelect").value);
-    const puntoVentaId = parseInt(document.getElementById("puntoVentaSelect").value);
-    const tipoMonedaId = parseInt(document.getElementById("monedaSelect").value);
-    const numeroInput = document.getElementById("numeroFacturaInput").value;
-    if (isNaN(puntoVentaId) || isNaN(tipoMonedaId)) {
-        alert("Seleccione Punto de Venta y Moneda.");
-        return null;
+async function enviarFactura() {
+    const clienteId = parseInt(document.getElementById('clienteSelect').value);
+    const puntoVentaId = parseInt(document.getElementById('puntoVentaSelect').value);
+    const tipoMonedaId = parseInt(document.getElementById('monedaSelect').value);
+    if (isNaN(clienteId) || isNaN(puntoVentaId) || isNaN(tipoMonedaId)) {
+        alert("Debe completar todos los datos de la cabecera.");
+        return;
     }
     if (detallesActuales.length === 0) {
-        alert("Agregue al menos un artículo a la factura.");
-        return null;
+        alert("La factura debe tener al menos un detalle.");
+        return;
     }
-    const hoy = new Date().toISOString().split("T")[0];
-    return {
-        numero: numeroInput ? parseInt(numeroInput) : undefined,
-        fechaEmision: facturaCargadaActual
-            ? facturaCargadaActual.fechaEmision
-            : hoy,
+    // Armar el payload idéntico a tu FacturaRequestDTO
+    const payload = {
+        numero:Date.now(),
+        fechaEmision: new Date().toISOString().split('T')[0],
+        condicionIva: 1,
+        clienteId,
         puntoVentaId,
-        condicionIvaId: 1,
         tipoMonedaId,
-        clienteId: isNaN(clienteId) ? null : clienteId,
         detalles: detallesActuales,
+
     };
-}
-async function crearFactura() {
-    const payload = armarPayload();
-    if (!payload)
-        return;
     try {
-        const res = await facturaService.crearFactura(payload);
-        alert(`¡Factura creada con éxito! ID: ${res.id} - Número: ${res.numero || "Borrador"}`);
-        resetearAModoNuevo();
-        await cargarGrilla();
+        const respuesta = await facturaService.crearFactura(payload);
+        alert(`¡Factura generada exitosamente con ID: ${respuesta.id}!`);
+        // Opcional: limpiar formulario después del éxito
+        detallesActuales = [];
+        actualizarTablaUI();
     }
     catch (error) {
-        alert(error.message);
+        console.error(error);
+        alert("Ocurrió un error al guardar la factura.");
     }
 }
-async function actualizarFactura() {
-    if (!facturaCargadaActual)
-        return;
-    const payload = armarPayload();
-    if (!payload)
-        return;
-    try {
-        await facturaService.actualizarFactura(facturaCargadaActual.id, payload);
-        alert(`¡Factura #${facturaCargadaActual.id} actualizada con éxito!`);
-        await cargarGrilla();
+
+function convertirSelectEnBuscable(selectId, placeholderTexto = 'Escribir para buscar...') {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+
+    // Si ya fue convertido antes, solo refrescamos
+    if (select.dataset.searchableReady === 'true') return;
+    select.dataset.searchableReady = 'true';
+
+    // Contenedor relativo que reemplaza visualmente al select
+    const wrapper = document.createElement('div');
+    wrapper.style.position = 'relative';
+    wrapper.style.width = '100%';
+
+    // Único input con estética de select (con flechita a la derecha)
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = placeholderTexto;
+    input.autocomplete = 'off';
+    input.style.width = '100%';
+    input.style.boxSizing = 'border-box';
+    input.style.paddingRight = '30px';
+    input.style.cursor = 'text';
+
+    // Flechita desplegable adentro del mismo input
+    const flecha = document.createElement('span');
+    flecha.textContent = '▾';
+    flecha.style.position = 'absolute';
+    flecha.style.right = '10px';
+    flecha.style.top = '50%';
+    flecha.style.transform = 'translateY(-50%)';
+    flecha.style.pointerEvents = 'none';
+    flecha.style.color = '#555';
+
+    // Lista desplegable flotante
+    const dropdown = document.createElement('div');
+    dropdown.style.position = 'absolute';
+    dropdown.style.top = '100%';
+    dropdown.style.left = '0';
+    dropdown.style.right = '0';
+    dropdown.style.maxHeight = '200px';
+    dropdown.style.overflowY = 'auto';
+    dropdown.style.background = '#fff';
+    dropdown.style.border = '1px solid #ccc';
+    dropdown.style.borderRadius = '0 0 6px 6px';
+    dropdown.style.boxShadow = '0 4px 10px rgba(0,0,0,0.12)';
+    dropdown.style.zIndex = '9999';
+    dropdown.style.display = 'none';
+
+    // Insertar en el DOM y ocultar el select nativo (pero sigue funcionando por detrás)
+    select.parentNode.insertBefore(wrapper, select);
+    wrapper.appendChild(input);
+    wrapper.appendChild(flecha);
+    wrapper.appendChild(dropdown);
+    wrapper.appendChild(select);
+    select.style.display = 'none';
+
+    const normalizar = (str) =>
+        (str || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+    const renderizarOpciones = (filtro = '') => {
+        dropdown.innerHTML = '';
+        const termino = normalizar(filtro.trim());
+
+        const opcionesValidas = Array.from(select.options).filter(opt => opt.value !== '');
+        const coincidencias = opcionesValidas.filter(opt =>
+            normalizar(opt.textContent).includes(termino)
+        );
+
+        if (coincidencias.length === 0) {
+            const vacio = document.createElement('div');
+            vacio.textContent = 'Sin coincidencias';
+            vacio.style.padding = '8px 12px';
+            vacio.style.color = '#888';
+            dropdown.appendChild(vacio);
+            return;
+        }
+
+        coincidencias.forEach(opt => {
+            const item = document.createElement('div');
+            item.textContent = opt.textContent;
+            item.style.padding = '8px 12px';
+            item.style.cursor = 'pointer';
+            item.style.borderBottom = '1px solid #f2f2f2';
+
+            item.addEventListener('mouseenter', () => {
+                item.style.background = '#eef4ff';
+            });
+            item.addEventListener('mouseleave', () => {
+                item.style.background = '#fff';
+            });
+
+            // Usamos mousedown para que seleccione antes de que el input pierda el foco
+            item.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                select.value = opt.value;
+                input.value = opt.textContent;
+                dropdown.style.display = 'none';
+                select.dispatchEvent(new Event('change'));
+            });
+
+            dropdown.appendChild(item);
+        });
+    };
+
+    // Al hacer clic o foco en el input, abre la lista
+    input.addEventListener('focus', () => {
+        renderizarOpciones(input.value);
+        dropdown.style.display = 'block';
+    });
+
+    input.addEventListener('click', () => {
+        renderizarOpciones(input.value);
+        dropdown.style.display = 'block';
+    });
+
+    // Mientras escribís (ej: "E"), filtra en vivo y si borrás limpia la selección
+    input.addEventListener('input', () => {
+        select.value = ''; // Obliga a elegir uno válido o toma la 1ra coincidencia
+        renderizarOpciones(input.value);
+        dropdown.style.display = 'block';
+
+        // Autoselecciona silenciosamente la primera coincidencia por si le da directo al botón
+        const termino = normalizar(input.value.trim());
+        if (termino) {
+            const primera = Array.from(select.options).find(
+                opt => opt.value !== '' && normalizar(opt.textContent).includes(termino)
+            );
+            if (primera) {
+                select.value = primera.value;
+            }
+        }
+    });
+
+    // Si presiona Enter, confirma la primera coincidencia visible
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const termino = normalizar(input.value.trim());
+            const primera = Array.from(select.options).find(
+                opt => opt.value !== '' && normalizar(opt.textContent).includes(termino)
+            );
+            if (primera) {
+                select.value = primera.value;
+                input.value = primera.textContent;
+                dropdown.style.display = 'none';
+                select.dispatchEvent(new Event('change'));
+            }
+        }
+    });
+
+    // Cerrar al hacer clic afuera
+    document.addEventListener('click', (e) => {
+        if (!wrapper.contains(e.target)) {
+            dropdown.style.display = 'none';
+            // Sincronizar texto con la opción que haya quedado seleccionada en el select
+            const seleccionada = select.options[select.selectedIndex];
+            if (seleccionada && seleccionada.value !== '') {
+                input.value = seleccionada.textContent;
+            } else {
+                input.value = '';
+            }
+        }
+    });
+
+    // Si tu código cambia select.value desde afuera (ej. al editar una factura o limpiar), actualiza el input
+    const descriptorOriginal = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+    if (descriptorOriginal && descriptorOriginal.set) {
+        Object.defineProperty(select, 'value', {
+            get() {
+                return descriptorOriginal.get.call(this);
+            },
+            set(nuevoValor) {
+                descriptorOriginal.set.call(this, nuevoValor);
+                const opt = Array.from(select.options).find(o => o.value === String(nuevoValor));
+                input.value = opt && opt.value !== '' ? opt.textContent : '';
+            }
+        });
     }
-    catch (error) {
-        alert(error.message);
-    }
-}
-async function anularFactura() {
-    if (!facturaCargadaActual)
-        return;
-    if (!confirm(`¿Está seguro de ANULAR la factura ID #${facturaCargadaActual.id}?`))
-        return;
-    try {
-        await facturaService.anularFactura(facturaCargadaActual.id);
-        alert(`Factura #${facturaCargadaActual.id} ANULADA correctamente.`);
-        window.cargarFacturaPorId(facturaCargadaActual.id);
-        await cargarGrilla();
-    }
-    catch (error) {
-        alert(error.message);
-    }
-}
-async function eliminarFactura() {
-    if (!facturaCargadaActual)
-        return;
-    if (!confirm(`¿Eliminar físicamente la factura ID #${facturaCargadaActual.id}?`))
-        return;
-    try {
-        await facturaService.eliminarFactura(facturaCargadaActual.id);
-        alert(`Factura eliminada de la base de datos.`);
-        resetearAModoNuevo();
-        await cargarGrilla();
-    }
-    catch (error) {
-        alert(error.message);
-    }
-}
-async function imprimirFacturaPdf() {
-    if (!facturaCargadaActual)
-        return;
-    window.imprimirPdfDirecto(facturaCargadaActual.id);
-}
-async function informarArcaFactura() {
-    if (!facturaCargadaActual)
-        return;
-    if (!confirm(`¿Informar la factura ID #${facturaCargadaActual.id} a ARCA/AFIP?\nEsta acción solicitará el CAE en el entorno de homologación.`))
-        return;
-    const btn = document.getElementById("btnInformarArca");
-    btn.disabled = true;
-    btn.textContent = "Informando...";
-    try {
-        const resultado = await facturaService.informarArca(facturaCargadaActual.id);
-        alert(`¡CAE obtenido!\nCAE: ${resultado.cae}\nVence: ${resultado.caeFechaVencimiento || "Ver detalle"}`);
-        await window.cargarFacturaPorId(facturaCargadaActual.id);
-        await cargarGrilla();
-    }
-    catch (error) {
-        alert(`Error: ${error.message}`);
-    }
-    finally {
-        btn.disabled = false;
-        btn.textContent = "🏛️ Informar a ARCA";
-    }
-}
-function aplicarReglasDeNegocioVisuales(f) {
-    const alerta = document.getElementById("alertaEstado");
-    const btnGuardar = document.getElementById("btnGuardarFactura");
-    const btnActualizar = document.getElementById("btnActualizarFactura");
-    const btnAnular = document.getElementById("btnAnularFactura");
-    const btnEliminar = document.getElementById("btnEliminarFactura");
-    const btnImprimir = document.getElementById("btnImprimirPdf");
-    const btnArca = document.getElementById("btnInformarArca");
-    const btnNuevo = document.getElementById("btnNuevaFactura");
-    btnGuardar.style.display = "none";
-    btnImprimir.style.display = "inline-block";
-    btnNuevo.style.display = "inline-block";
-    alerta.style.display = "block";
-    const tieneCae = f.cae && f.cae.trim().length > 0;
-    const tieneNumero = f.numero && f.numero > 0;
-    const esAnulada = f.estado === "ANULADA";
-    if (esAnulada) {
-        alerta.className = "badge badge-anulada";
-        alerta.textContent = `FACTURA ANULADA (ID #${f.id}). Bloqueada para modificaciones.`;
-        btnActualizar.style.display = "none";
-        btnAnular.style.display = "none";
-        btnEliminar.style.display = "none";
-        btnArca.style.display = "none";
-        bloquearControles(true);
-    }
-    else if (tieneCae) {
-        alerta.className = "badge badge-arca";
-        alerta.textContent = `INFORMADA A ARCA (ID #${f.id} - CAE: ${f.cae}). Modificación bloqueada. Solo se permite Anular.`;
-        btnActualizar.style.display = "none";
-        btnEliminar.style.display = "none";
-        btnAnular.style.display = "inline-block";
-        btnArca.style.display = "none";
-        bloquearControles(true);
-    }
-    else if (tieneNumero) {
-        alerta.className = "badge badge-emitida";
-        alerta.textContent = `Factura emitida con Número #${f.numero} (ID #${f.id}). No se puede eliminar, solo Anular o Modificar.`;
-        btnActualizar.style.display = "inline-block";
-        btnAnular.style.display = "inline-block";
-        btnEliminar.style.display = "none";
-        btnArca.style.display = "inline-block";
-        bloquearControles(false);
-    }
-    else {
-        alerta.className = "badge badge-borrador";
-        alerta.textContent = `Borrador sin número (ID #${f.id}). Se puede modificar o eliminar físicamente.`;
-        btnActualizar.style.display = "inline-block";
-        btnEliminar.style.display = "inline-block";
-        btnAnular.style.display = "none";
-        btnArca.style.display = "inline-block";
-        bloquearControles(false);
-    }
-    actualizarTablaUI();
-}
-function bloquearControles(bloquear) {
-    document.getElementById("clienteSelect").disabled =
-        bloquear;
-    document.getElementById("puntoVentaSelect").disabled =
-        bloquear;
-    document.getElementById("monedaSelect").disabled =
-        bloquear;
-    document.getElementById("numeroFacturaInput").disabled =
-        bloquear;
-    document.getElementById("articuloSelect").disabled =
-        bloquear;
-    document.getElementById("cantidadInput").disabled =
-        bloquear;
-    document.getElementById("btnAgregarLinea").disabled =
-        bloquear;
-}
-function resetearAModoNuevo() {
-    facturaCargadaActual = null;
-    detallesActuales = [];
-    document.getElementById("tituloFormulario").textContent =
-        "Nueva Factura de Venta";
-    document.getElementById("numeroFacturaInput").value =
-        "";
-    document.getElementById("clienteSelect").value = "";
-    document.getElementById("puntoVentaSelect").value = "";
-    document.getElementById("monedaSelect").value = "";
-    document.getElementById("cantidadInput").value = "1";
-    document.getElementById("alertaEstado").style.display = "none";
-    document.getElementById("btnGuardarFactura").style.display = "inline-block";
-    document.getElementById("btnActualizarFactura").style.display = "none";
-    document.getElementById("btnAnularFactura").style.display = "none";
-    document.getElementById("btnEliminarFactura").style.display = "none";
-    document.getElementById("btnImprimirPdf").style.display = "none";
-    document.getElementById("btnInformarArca").style.display = "none";
-    document.getElementById("btnNuevaFactura").style.display = "none";
-    bloquearControles(false);
-    actualizarTablaUI();
 }
