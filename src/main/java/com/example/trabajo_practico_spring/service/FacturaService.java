@@ -139,6 +139,9 @@ public class FacturaService {
     @Transactional
     public FacturaReporteDTO informarArca(Long id) throws Exception {
         FacturaVenta factura = buscarFactura(id);
+        
+        LocalDate fecha = factura.getFechaEmision() != null ? factura.getFechaEmision() : LocalDate.now();
+        String fechaEmision = fecha.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
 
         if (ESTADO_ANULADA.equalsIgnoreCase(factura.getEstado())) {
             throw new OperacionNoPermitidaException("No se puede informar a ARCA una factura ANULADA.");
@@ -150,9 +153,6 @@ public class FacturaService {
         String[] tokenSign = afipWsaaService.obtenerTokenYSign();
         String token = tokenSign[0];
         String sign = tokenSign[1];
-
-        String fechaEmision = factura.getFechaEmision()
-                .format(DateTimeFormatter.ofPattern("yyyyMMdd"));
 
         Long cuitCliente = null;
         if (factura.getCliente() != null && factura.getCliente().getCuitCuil() != null) {
@@ -236,19 +236,18 @@ public class FacturaService {
         return Math.round(valor * 100.0) / 100.0;
     }
 
-    private FacturaReporteDTO aReporteDto(FacturaVenta f) {
-        FacturaReporteDTO dto = new FacturaReporteDTO(
+private FacturaReporteDTO aReporteDto(FacturaVenta f) {
+        return new FacturaReporteDTO(
                 f.getId(),
                 f.getNumero(),
                 f.getFechaEmision(),
                 f.getCliente() == null ? "Consumidor Final" : f.getCliente().getDenominacion(),
-                f.getCondicionIva().getDenominacion(),
-                f.getPuntoVenta().getDescripcion(),
+                f.getCondicionIva() == null ? "Consumidor Final" : f.getCondicionIva().getDenominacion(),
+                f.getPuntoVenta() == null ? "Punto de Venta" : f.getPuntoVenta().getDescripcion(),
                 f.getImporteTotal(),
-                f.getDetalles().size(),
+                f.getDetalles() == null ? 0 : f.getDetalles().size(),
                 f.getEstado(),
                 f.getCae());
-        return dto;
     }
 
     private FacturaVentaDTO aDetalleDto(FacturaVenta f) {

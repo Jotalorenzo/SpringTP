@@ -104,12 +104,20 @@
           placeholder="Ej: 1005 (o vacío para Borrador)"
         />
       </div>
+
+      <!-- Selector Cliente con Explorer Modal -->
       <div class="form-group">
         <label>Cliente:</label>
-        <select id="clienteSelect">
-          <option value="">Cargando...</option>
-        </select>
+        <div style="display: flex; gap: 8px">
+          <select id="clienteSelect" style="flex: 1">
+            <option value="">Seleccione una opción...</option>
+          </select>
+          <button type="button" id="btnAbrirModalCliente" class="btn-outline">
+            🔍 Explorer
+          </button>
+        </div>
       </div>
+
       <div class="form-group">
         <label>Punto de Venta:</label>
         <select id="puntoVentaSelect">
@@ -126,12 +134,24 @@
 
     <div class="section" id="seccionDetalles">
       <h3>Detalle de Artículos</h3>
-      <div style="display: flex; gap: 10px; align-items: flex-end">
-        <div style="flex: 1">
+      <div
+        style="display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap"
+      >
+        <!-- Selector Artículo con Explorer Modal -->
+        <div style="flex: 1; min-width: 200px">
           <label>Artículo:</label>
-          <select id="articuloSelect">
-            <option value="">Cargando...</option>
-          </select>
+          <div style="display: flex; gap: 8px">
+            <select id="articuloSelect" style="flex: 1">
+              <option value="">Seleccione una opción...</option>
+            </select>
+            <button
+              type="button"
+              id="btnAbrirModalArticulo"
+              class="btn-outline"
+            >
+              🔍 Explorer
+            </button>
+          </div>
         </div>
         <div style="width: 120px">
           <label>Cantidad:</label>
@@ -150,6 +170,68 @@
         </thead>
         <tbody></tbody>
       </table>
+    </div>
+
+    <!-- MODAL EXPLORER CLIENTES -->
+    <div id="modalCliente" class="modal-backdrop" style="display: none">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h4>Explorer de Clientes</h4>
+          <button type="button" class="btn-close" id="btnCerrarModalCliente">
+            &times;
+          </button>
+        </div>
+        <input
+          type="text"
+          id="filtroModalCliente"
+          placeholder="Filtrar por nombre o CUIT..."
+          style="margin-bottom: 10px"
+        />
+        <div style="max-height: 250px; overflow-y: auto">
+          <table id="tablaModalClientes">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Denominación</th>
+                <th>CUIT/CUIL</th>
+                <th>Acción</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL EXPLORER ARTÍCULOS -->
+    <div id="modalArticulo" class="modal-backdrop" style="display: none">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h4>Explorer de Artículos</h4>
+          <button type="button" class="btn-close" id="btnCerrarModalArticulo">
+            &times;
+          </button>
+        </div>
+        <input
+          type="text"
+          id="filtroModalArticulo"
+          placeholder="Filtrar por código o descripción..."
+          style="margin-bottom: 10px"
+        />
+        <div style="max-height: 250px; overflow-y: auto">
+          <table id="tablaModalArticulos">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Código</th>
+                <th>Descripción</th>
+                <th>Acción</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
     <!-- Acciones del Formulario -->

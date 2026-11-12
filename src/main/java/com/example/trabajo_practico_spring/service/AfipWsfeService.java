@@ -22,14 +22,18 @@ public class AfipWsfeService {
         this.props = props;
     }
 
-    public record ResultadoCae(String cae, LocalDate fechaVencimiento, long nroComprobante) {}
+    public record ResultadoCae(String cae, LocalDate fechaVencimiento, long nroComprobante) {
+
+    }
 
     public ResultadoCae solicitarCae(String token, String sign, double importeTotal, String fechaEmision, Long cuitCliente) throws Exception {
         int cbteTipo = props.getCbteTipo();
+        System.out.println(">>> [WSFE] Consultando último comprobante para PtoVta=" + props.getPuntoVenta() + ", CbteTipo=" + cbteTipo);
         long ultimoNro = consultarUltimoNro(token, sign, cbteTipo);
         long nuevoNro = ultimoNro + 1;
+        System.out.println(">>> [WSFE] Último número fue: " + ultimoNro + ". El nuevo comprobante será el N°: " + nuevoNro);
 
-        String soapReq = construirSolicitudCae(token, sign, nuevoNro, importeTotal, fechaEmision, cbteTipo, cuitCliente);
+        String soapReq = construirSolicitudCae(token, sign, nuevoNro, importeTotal, fechaEmision, cbteTipo);
         String response = enviarSoap(URL_WSFE_HOMO, "FECAESolicitar", soapReq);
 
         return parsearRespuesta(response, nuevoNro);
@@ -53,18 +57,14 @@ public class AfipWsfeService {
         if (resp.contains("<Errors>") && resp.contains("<Err>")) {
             String msg = extraerTagSeguro(resp, "Msg");
             String code = extraerTagSeguro(resp, "Code");
-            throw new RuntimeException("AFIP WSFE Error al consultar último comprobante (" + code + "): " + msg);
+            throw new RuntimeException("AFIP WSFE Error (" + code + "): " + msg);
         }
 
         return extraerLong(resp, "CbteNro");
     }
 
-    private String construirSolicitudCae(String token, String sign, long nro, double importe, String fecha, int cbteTipo, Long cuitCliente) {
+    private String construirSolicitudCae(String token, String sign, long nro, double importe, String fecha, int cbteTipo) {
         String importeStr = String.format(Locale.US, "%.2f", importe);
-
-        // Si hay CUIT de cliente válido se usa DocTipo 80 (CUIT), sino 99 (Consumidor Final)
-        int docTipo = (cuitCliente != null && cuitCliente > 0) ? 80 : 99;
-        long docNro = (cuitCliente != null && cuitCliente > 0) ? cuitCliente : 0L;
 
         return "<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\" "
                 + "xmlns:ar=\"http://ar.gov.afip.dif.FEV1/\">"
@@ -83,8 +83,8 @@ public class AfipWsfeService {
                 + "<ar:FeDetReq>"
                 + "<ar:FECAEDetRequest>"
                 + "<ar:Concepto>1</ar:Concepto>"
-                + "<ar:DocTipo>" + docTipo + "</ar:DocTipo>"
-                + "<ar:DocNro>" + docNro + "</ar:DocNro>"
+                + "<ar:DocTipo>99</ar:DocTipo>"
+                + "<ar:DocNro>0</ar:DocNro>"
                 + "<ar:CbteDesde>" + nro + "</ar:CbteDesde>"
                 + "<ar:CbteHasta>" + nro + "</ar:CbteHasta>"
                 + "<ar:CbteFch>" + fecha + "</ar:CbteFch>"
@@ -96,6 +96,7 @@ public class AfipWsfeService {
                 + "<ar:ImpIVA>0.00</ar:ImpIVA>"
                 + "<ar:MonId>PES</ar:MonId>"
                 + "<ar:MonCotiz>1</ar:MonCotiz>"
+                + "<ar:CondicionIVAReceptorId>5</ar:CondicionIVAReceptorId>" // <--- RESOLUCIÓN GENERAL 5616
                 + "</ar:FECAEDetRequest>"
                 + "</ar:FeDetReq>"
                 + "</ar:FeCAEReq>"
@@ -119,6 +120,7 @@ public class AfipWsfeService {
         String vtoStr = extraerTagSeguro(xml, "CAEFchVto");
         LocalDate vto = LocalDate.parse(vtoStr, DateTimeFormatter.ofPattern("yyyyMMdd"));
 
+        System.out.println(">>> [WSFE] ¡Factura APROBADA! CAE=" + cae + ", Vto=" + vto);
         return new ResultadoCae(cae, vto, nro);
     }
 
@@ -139,12 +141,20 @@ public class AfipWsfeService {
         int status = conn.getResponseCode();
         InputStream is = (status < 400) ? conn.getInputStream() : conn.getErrorStream();
 
+        if (is == null) {
+            throw new RuntimeException("AFIP WSFE respondió con código HTTP " + status + " pero sin cuerpo de respuesta.");
+        }
+
         try (BufferedReader br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
             StringBuilder sb = new StringBuilder();
             String line;
-            while ((line = br.readLine()) != null) sb.append(line);
+            while ((line = br.readLine()) != null) {
+                sb.append(line);
+            }
             String response = sb.toString();
+
             if (status >= 400) {
+                System.err.println(">>> [WSFE ERROR HTTP " + status + "]: " + response);
                 throw new RuntimeException("WSFE HTTP " + status + ": " + response);
             }
             return response;
@@ -154,7 +164,9 @@ public class AfipWsfeService {
     private String extraerTagSeguro(String xml, String tag) {
         int inicio = xml.indexOf("<" + tag + ">");
         int fin = xml.indexOf("</" + tag + ">");
-        if (inicio == -1 || fin == -1) return "Desconocido";
+        if (inicio == -1 || fin == -1) {
+            return "Desconocido";
+        }
         return xml.substring(inicio + tag.length() + 2, fin).trim();
     }
 

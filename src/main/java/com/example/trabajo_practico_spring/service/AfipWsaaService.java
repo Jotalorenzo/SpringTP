@@ -21,6 +21,8 @@ import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.security.*;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
@@ -37,13 +39,9 @@ public class AfipWsaaService {
     private static final String URL_WSAA_HOMO = "https://wsaahomo.afip.gov.ar/ws/services/LoginCms";
     private static final ZoneId ZONA_ARG = ZoneId.of("America/Argentina/Buenos_Aires");
     private static final DateTimeFormatter AFIP_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX");
+    private static final String CACHE_FILE = "certs/ta_cache.xml";
 
     private final AfipProperties props;
-
-    // Caché en memoria para no saturar AFIP
-    private String tokenCache = null;
-    private String signCache = null;
-    private ZonedDateTime expirationCache = null;
 
     public AfipWsaaService(AfipProperties props) {
         this.props = props;
@@ -70,14 +68,15 @@ public class AfipWsaaService {
     }
 
     /**
-     * Obtiene Token y Sign. Si el token actual sigue vigente, lo devuelve de la memoria.
+     * Obtiene Token y Sign. Primero intenta leer del archivo local en disco si no ha vencido.
      */
     public synchronized String[] obtenerTokenYSign() throws Exception {
-        ZonedDateTime ahora = ZonedDateTime.now(ZONA_ARG);
-        if (tokenCache != null && signCache != null && expirationCache != null && ahora.isBefore(expirationCache.minusMinutes(5))) {
-            return new String[]{tokenCache, signCache};
+        String[] credencialesGuardadas = leerDeDiscoSiValido();
+        if (credencialesGuardadas != null) {
+            return credencialesGuardadas;
         }
 
+        // Si no hay archivo o expiró, solicitamos uno nuevo a AFIP
         PrivateKey privateKey = cargarClavePrivada(props.getKeyPath());
         X509Certificate cert = cargarCertificado(props.getCertPath());
         String traXml = construirTra();
@@ -85,16 +84,47 @@ public class AfipWsaaService {
         String response = enviarSoap(URL_WSAA_HOMO, construirSoapEnvelope(cmsBase64));
 
         String[] credenciales = extraerTokenYSign(response);
-        this.tokenCache = credenciales[0];
-        this.signCache = credenciales[1];
-        this.expirationCache = ahora.plusHours(10); // Expira en 12h, dejamos 10h por seguridad
+
+        // Guardamos en disco para que sobreviva a reinicios
+        guardarEnDisco(credenciales[0], credenciales[1]);
 
         return credenciales;
     }
 
+    private String[] leerDeDiscoSiValido() {
+        try {
+            File f = new File(CACHE_FILE);
+            if (!f.exists()) return null;
+
+            String contenido = Files.readString(Paths.get(CACHE_FILE));
+            String expirationStr = extraerTag(contenido, "expirationTime");
+            ZonedDateTime expiration = ZonedDateTime.parse(expirationStr, AFIP_FMT);
+
+            if (ZonedDateTime.now(ZONA_ARG).isBefore(expiration.minusMinutes(10))) {
+                String token = extraerTag(contenido, "token");
+                String sign = extraerTag(contenido, "sign");
+                return new String[]{token, sign};
+            }
+        } catch (Exception e) {
+            // Si hubo error leyendo el cache, forzamos llamada nueva
+        }
+        return null;
+    }
+
+    private void guardarEnDisco(String token, String sign) {
+        try {
+            ZonedDateTime expiration = ZonedDateTime.now(ZONA_ARG).plusHours(10);
+            String xml = "<loginTicketResponse>"
+                    + "<expirationTime>" + expiration.format(AFIP_FMT) + "</expirationTime>"
+                    + "<token>" + token + "</token>"
+                    + "<sign>" + sign + "</sign>"
+                    + "</loginTicketResponse>";
+            Files.writeString(Paths.get(CACHE_FILE), xml);
+        } catch (Exception ignored) {}
+    }
+
     private String construirTra() {
         ZonedDateTime now = ZonedDateTime.now(ZONA_ARG).truncatedTo(ChronoUnit.SECONDS);
-        // Margen de 10 minutos antes y después para compensar desfases de reloj
         String genTime = now.minusMinutes(10).format(AFIP_FMT);
         String expTime = now.plusMinutes(10).format(AFIP_FMT);
         long uniqueId = System.currentTimeMillis() / 1000;
@@ -180,7 +210,7 @@ public class AfipWsaaService {
     private PrivateKey cargarClavePrivada(String path) throws Exception {
         File file = new File(path);
         if (!file.exists()) {
-            throw new FileNotFoundException("No se encontró la clave privada en la ruta: " + file.getAbsolutePath());
+            throw new FileNotFoundException("No se encontró la clave privada en: " + file.getAbsolutePath());
         }
         try (Reader reader = new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8);
              PEMParser pemParser = new PEMParser(reader)) {
@@ -196,7 +226,7 @@ public class AfipWsaaService {
     private X509Certificate cargarCertificado(String path) throws Exception {
         File file = new File(path);
         if (!file.exists()) {
-            throw new FileNotFoundException("No se encontró el certificado en la ruta: " + file.getAbsolutePath());
+            throw new FileNotFoundException("No se encontró el certificado en: " + file.getAbsolutePath());
         }
         try (FileInputStream fis = new FileInputStream(file)) {
             return (X509Certificate) CertificateFactory.getInstance("X.509").generateCertificate(fis);

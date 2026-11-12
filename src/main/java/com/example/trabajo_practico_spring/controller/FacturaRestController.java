@@ -206,14 +206,20 @@ public class FacturaRestController {
     @PutMapping("/{id}/informar-arca")
     public ResponseEntity<?> informarArca(@PathVariable Long id) {
         try {
+            System.out.println(">>> [ARCA] Iniciando autorización para factura ID: " + id);
             FacturaReporteDTO resultado = facturaService.informarArca(id);
+            System.out.println(">>> [ARCA] ¡Éxito! CAE obtenido: " + resultado.getCae());
             return ResponseEntity.ok(resultado);
         } catch (com.example.trabajo_practico_spring.exception.OperacionNoPermitidaException e) {
+            System.err.println(">>> [ARCA] Operación no permitida: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(java.util.Map.of("error", e.getMessage()));
         } catch (Exception e) {
+            System.err.println(">>> [ARCA] ERROR INESPERADO AL COMUNICARSE CON ARCA:");
+            e.printStackTrace(); // <--- ESTO IMPRIMIRÁ EL ERROR EXACTO EN TU CONSOLA
+            String detalle = (e.getMessage() != null && !e.getMessage().isBlank()) ? e.getMessage() : e.toString();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(java.util.Map.of("error", "Error al comunicarse con ARCA: " + e.getMessage()));
+                    .body(java.util.Map.of("error", "Error al comunicarse con ARCA: " + detalle));
         }
     }
 
