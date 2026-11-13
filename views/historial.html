@@ -1,0 +1,76 @@
+<div class="section">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+    <h3 style="margin: 0;">Historial y Búsqueda de Facturas</h3>
+    <button id="btnAbrirNuevaFactura" class="btn-primary">+ Crear Factura</button>
+  </div>
+
+  <!-- Formulario de Filtros -->
+  <div class="filtros-grid">
+    <div>
+      <label>N° Factura:</label>
+      <input type="number" id="filtroNumero" placeholder="Ej: 1001" />
+    </div>
+    <div>
+      <label>Cliente:</label>
+      <input type="text" id="filtroCliente" placeholder="Buscar por nombre..." />
+    </div>
+    <div>
+      <label>Fecha Desde:</label>
+      <input type="date" id="filtroFechaDesde" />
+    </div>
+    <div>
+      <label>Fecha Hasta:</label>
+      <input type="date" id="filtroFechaHasta" />
+    </div>
+    <div>
+      <label>Estado:</label>
+      <select id="filtroEstado">
+        <option value="">Todos</option>
+        <option value="EMITIDA">Emitida</option>
+        <option value="AUTORIZADA">Autorizada (con CAE)</option>
+        <option value="ANULADA">Anulada</option>
+      </select>
+    </div>
+    <div>
+      <label>Informada ARCA:</label>
+      <select id="filtroArca">
+        <option value="">Todas</option>
+        <option value="true">Sí (con CAE)</option>
+        <option value="false">No (sin CAE)</option>
+      </select>
+    </div>
+  </div>
+
+  <div style="display: flex; gap: 10px; margin-top: 15px">
+    <button id="btnFiltrar" class="btn-primary">Filtrar</button>
+    <button id="btnLimpiarFiltros" class="btn-outline">Limpiar</button>
+  </div>
+
+  <!-- Tabla de Facturas -->
+  <table id="tablaGrillaFacturas">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>N° Factura</th>
+        <th>Fecha</th>
+        <th>Cliente</th>
+        <th>Total</th>
+        <th>Estado</th>
+        <th>ARCA</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td colspan="8" style="text-align: center">Cargando facturas...</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- Controles de Paginación -->
+  <div class="paginacion-bar">
+    <button id="btnPaginaAnterior" class="btn-outline">« Anterior</button>
+    <span id="infoPaginacion">Página 1 de 1</span>
+    <button id="btnPaginaSiguiente" class="btn-outline">Siguiente »</button>
+  </div>
+</div>

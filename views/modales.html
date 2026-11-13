@@ -1,0 +1,67 @@
+<!-- MODAL EXPLORER CLIENTES -->
+<div id="modalCliente" class="modal-backdrop" style="display: none">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h4>Explorer de Clientes</h4>
+      <button type="button" class="btn-close" id="btnCerrarModalCliente">&times;</button>
+    </div>
+    <div style="display: flex; gap: 10px; margin-bottom: 10px">
+  <input
+    type="text"
+    id="filtroModalClienteNombre"
+    placeholder="Filtrar por nombre..."
+    style="flex: 1"
+  />
+  <input
+    type="text"
+    id="filtroModalClienteCuit"
+    placeholder="Filtrar por CUIT/CUIL..."
+    style="flex: 1"
+  />
+</div>
+    <div style="max-height: 250px; overflow-y: auto">
+      <table id="tablaModalClientes">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Denominación</th>
+            <th>CUIT/CUIL</th>
+            <th>Acción</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EXPLORER ARTÍCULOS -->
+<div id="modalArticulo" class="modal-backdrop" style="display: none">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h4>Explorer de Artículos</h4>
+      <button type="button" class="btn-close" id="btnCerrarModalArticulo">&times;</button>
+    </div>
+    <input
+      type="text"
+      id="filtroModalArticulo"
+      placeholder="Filtrar por código o descripción..."
+      style="margin-bottom: 10px"
+    />
+    <div style="max-height: 250px; overflow-y: auto">
+      <table id="tablaModalArticulos">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Código</th>
+            <th>Descripción</th>
+            <th>P. Minorista</th>
+            <th>P. Mayorista</th>
+            <th>Acción</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
