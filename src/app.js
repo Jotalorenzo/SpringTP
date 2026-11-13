@@ -549,6 +549,8 @@ window.seleccionarFactura = async (id) => {
     document.getElementById("btnGuardarFactura").style.display = "none";
     document.getElementById("btnActualizarFactura").style.display = puedeEditar ? "inline-block" : "none";
     document.getElementById("btnInformarArca").style.display = puedeEditar ? "inline-block" : "none";
+    document.getElementById("btnAnularFactura").style.display = puedeEditar ? "inline-block" : "none";
+    document.getElementById("btnEliminarFactura").style.display = puedeEditar ? "inline-block" : "none";
     document.getElementById("btnImprimirPdf").style.display = "inline-block";
 
     document.getElementById("btnAnularFactura").style.display =
