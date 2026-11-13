@@ -15,12 +15,6 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Cuerpo de las peticiones POST y PUT de /api/facturas.
- *
- * Las relaciones se referencian por ID (puntoVentaId, clienteId, ...) en lugar de
- * enviar entidades anidadas, desacoplando el contrato de la API del modelo JPA.
- */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -31,7 +25,7 @@ public class FacturaRequestDTO {
 
     private Long numero;
 
-    @NotNull(message = "La fecha de emision es obligatoria")
+    @NotNull(message = "La fecha de emisión es obligatoria")
     private LocalDate fechaEmision;
 
     @NotNull(message = "El puntoVentaId es obligatorio")
@@ -43,14 +37,19 @@ public class FacturaRequestDTO {
     @NotNull(message = "El tipoMonedaId es obligatorio")
     private Long tipoMonedaId;
 
-    /** Opcional: si es null se factura como Consumidor Final. */
+    @NotNull(message = "Debe indicar la Lista de Precios")
+    private Long listaPrecioId;
+
+    @Size(max = 5)
+    @Builder.Default
+    private String letra = "B"; // 'A', 'B', 'C', 'X'
+
     private Long clienteId;
 
-    /** Opcional en el alta (por defecto "EMITIDA"); se usa para cambiar el estado en el PUT. */
-    @Size(max = 30, message = "El estado no puede superar los 30 caracteres")
+    @Size(max = 30)
     private String estado;
 
-    @Size(max = 255, message = "Las observaciones no pueden superar los 255 caracteres")
+    @Size(max = 255)
     private String observaciones;
 
     @Valid

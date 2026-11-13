@@ -96,4 +96,12 @@ public class FacturaVenta extends AuditoriaApp {
         this.detalles.remove(detalle);
         detalle.setFactura(null);
     }
+    
+    @Column(name = "letra", length = 5, nullable = false)
+    @Builder.Default
+    private String letra = "B"; // 'A', 'B', 'C' o 'X'
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "lista_precio_id")
+    private ListaPrecio listaPrecio;
 }

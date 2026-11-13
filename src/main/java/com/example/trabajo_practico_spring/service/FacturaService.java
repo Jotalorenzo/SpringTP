@@ -1,30 +1,19 @@
 package com.example.trabajo_practico_spring.service;
 
-import com.example.trabajo_practico_spring.dto.FacturaDetalleRequestDTO;
-import com.example.trabajo_practico_spring.dto.FacturaReporteDTO;
-import com.example.trabajo_practico_spring.dto.FacturaRequestDTO;
-import com.example.trabajo_practico_spring.dto.FacturaVentaDTO;
-import com.example.trabajo_practico_spring.dto.FacturaVentaDetalleDTO;
-import com.example.trabajo_practico_spring.dto.PaginaDTO;
+import com.example.trabajo_practico_spring.dto.*;
 import com.example.trabajo_practico_spring.exception.OperacionNoPermitidaException;
 import com.example.trabajo_practico_spring.exception.RecursoNoEncontradoException;
-import com.example.trabajo_practico_spring.model.FacturaVenta;
-import com.example.trabajo_practico_spring.model.FacturaVentaDetalle;
-import com.example.trabajo_practico_spring.model.ListaPrecioArticulo;
-import com.example.trabajo_practico_spring.repository.ClienteRepository;
-import com.example.trabajo_practico_spring.repository.CondicionIvaRepository;
-import com.example.trabajo_practico_spring.repository.FacturaRepository;
-import com.example.trabajo_practico_spring.repository.FacturaVentaRepository;
-import com.example.trabajo_practico_spring.repository.ListaPrecioArticuloRepository;
-import com.example.trabajo_practico_spring.repository.PuntoVentaRepository;
-import com.example.trabajo_practico_spring.repository.TipoMonedaRepository;
+import com.example.trabajo_practico_spring.model.*;
+import com.example.trabajo_practico_spring.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -40,34 +29,54 @@ public class FacturaService {
     private final CondicionIvaRepository condicionIvaRepository;
     private final TipoMonedaRepository tipoMonedaRepository;
     private final ClienteRepository clienteRepository;
+    private final ListaPrecioRepository listaPrecioRepository;
     private final ListaPrecioArticuloRepository listaPrecioArticuloRepository;
     private final AuditoriaService auditoria;
     private final AfipWsaaService afipWsaaService;
     private final AfipWsfeService afipWsfeService;
 
+    // ------------------------------------------------------------- EXPLORER (Máximo 100 resultados)
     @Transactional(readOnly = true)
-    public List<FacturaReporteDTO> buscarFacturasFiltradas(LocalDate fechaDesde, LocalDate fechaHasta, String estado, Double montoMinimo) {
-        return facturaRepository.buscarFacturasFiltradas(fechaDesde, fechaHasta, estado, montoMinimo);
+    public List<ClienteDTO> buscarClientesExplorer(String termino) {
+        return clienteRepository.buscarPorTermino(termino, PageRequest.of(0, 50))
+                .stream().map(c -> ClienteDTO.builder()
+                .id(c.getId())
+                .cuitCuil(c.getCuitCuil())
+                .denominacion(c.getDenominacion())
+                .build())
+                .toList();
     }
 
     @Transactional(readOnly = true)
-    public FacturaVentaDTO obtener(Long id) {
-        return aDetalleDto(buscarFactura(id));
+    public List<ArticuloPrecioDTO> buscarArticulosExplorer(Long listaPrecioId, String termino) {
+        if (listaPrecioId == null) {
+            throw new OperacionNoPermitidaException("Debe seleccionar una Lista de Precios antes de buscar artículos.");
+        }
+        return listaPrecioArticuloRepository.buscarPorListaYTermino(listaPrecioId, termino, PageRequest.of(0, 50))
+                .stream().map(lpa -> ArticuloPrecioDTO.builder()
+                .articuloId(lpa.getArticulo().getId())
+                .listaPrecioArticuloId(lpa.getId())
+                .codigo(lpa.getArticulo().getCodigo())
+                .denominacion(lpa.getArticulo().getDenominacion())
+                .precioVenta(lpa.getPrecioVenta())
+                .build())
+                .toList();
     }
 
+    // ------------------------------------------------------------- CREAR (Transaccional)
     @Transactional
     public FacturaReporteDTO crear(FacturaRequestDTO request) {
+        validarFechaEmision(request.getPuntoVentaId(), request.getFechaEmision(), null);
+
         FacturaVenta factura = new FacturaVenta();
         factura.setEstado(ESTADO_INICIAL);
+        factura.setLetra(request.getLetra() != null ? request.getLetra().toUpperCase() : "B");
         aplicarDatos(factura, request);
         auditoria.completarAlta(factura);
         return aReporteDto(facturaVentaRepository.save(factura));
     }
 
-    /**
-     * REGLA: Si la factura ya fue informada a ARCA (tiene CAE) o ya está
-     * anulada, se bloquea cualquier modificación de sus datos o ítems.
-     */
+    // ------------------------------------------------------------- ACTUALIZAR (Transaccional)
     @Transactional
     public FacturaReporteDTO actualizar(Long id, FacturaRequestDTO request) {
         FacturaVenta factura = buscarFactura(id);
@@ -75,20 +84,31 @@ public class FacturaService {
         if (ESTADO_ANULADA.equalsIgnoreCase(factura.getEstado())) {
             throw new OperacionNoPermitidaException("No se puede modificar una factura que ya fue ANULADA.");
         }
-
-        boolean informadaArca = factura.getCae() != null && !factura.getCae().isBlank();
-        if (informadaArca) {
-            throw new OperacionNoPermitidaException("La factura ya fue informada a ARCA (CAE: " + factura.getCae() + "). Está bloqueada para modificaciones; solo puede ser Anulada.");
+        if (factura.getCae() != null && !factura.getCae().isBlank()) {
+            throw new OperacionNoPermitidaException("La factura ya fue informada a ARCA (CAE: " + factura.getCae() + "). No permite modificaciones.");
         }
 
+        validarFechaEmision(request.getPuntoVentaId(), request.getFechaEmision(), id);
+
+        factura.setLetra(request.getLetra() != null ? request.getLetra().toUpperCase() : factura.getLetra());
         aplicarDatos(factura, request);
         auditoria.completarModificacion(factura);
         return aReporteDto(facturaVentaRepository.save(factura));
     }
 
-    /**
-     * REGLA: Anulación lógica. Registra fecha y estado ANULADA.
-     */
+    // ------------------------------------------------------------- VALIDACIÓN DE FECHA
+    private void validarFechaEmision(Long puntoVentaId, LocalDate fechaNueva, Long idFacturaActual) {
+        Optional<LocalDate> maxFecha = facturaVentaRepository.findMaxFechaEmisionByPuntoVentaId(puntoVentaId);
+        if (maxFecha.isPresent() && idFacturaActual == null) { // Al crear
+            if (fechaNueva.isBefore(maxFecha.get())) {
+                throw new OperacionNoPermitidaException(
+                        "La fecha de emisión (" + fechaNueva + ") no puede ser anterior a la última fecha facturada en este punto de venta (" + maxFecha.get() + ")."
+                );
+            }
+        }
+    }
+
+    // ------------------------------------------------------------- ANULACIÓN LÓGICA
     @Transactional
     public FacturaReporteDTO anular(Long id) {
         FacturaVenta factura = buscarFactura(id);
@@ -104,17 +124,7 @@ public class FacturaService {
         return aReporteDto(facturaVentaRepository.save(factura));
     }
 
-    @Transactional(readOnly = true)
-    public PaginaDTO<FacturaReporteDTO> buscarFacturasPaginadas(
-            Long numeroFactura, LocalDate fechaDesde, LocalDate fechaHasta,
-            String cliente, String estado, Boolean informadaArca, int pagina, int tamanio) {
-        return facturaRepository.buscarFacturasPaginadas(numeroFactura, fechaDesde, fechaHasta, cliente, estado, informadaArca, pagina, tamanio);
-    }
-
-    /**
-     * REGLA: Eliminación física. Si la factura posee NÚMERO o CAE, se prohíbe
-     * el borrado físico (debe anularse).
-     */
+    // ------------------------------------------------------------- ELIMINACIÓN FÍSICA
     @Transactional
     public void eliminar(Long id) {
         FacturaVenta factura = buscarFactura(id);
@@ -124,25 +134,21 @@ public class FacturaService {
 
         if (tieneNumero || tieneCae) {
             throw new OperacionNoPermitidaException(
-                    "No se puede eliminar físicamente una factura con número oficial o informada a ARCA. Debe utilizar la opción 'Anular'."
+                    "No se puede eliminar físicamente una factura con número oficial o CAE de ARCA. Debe utilizar 'Anular'."
             );
         }
 
         facturaVentaRepository.delete(factura);
     }
 
-    /**
-     * Informa la factura a ARCA/AFIP (homologación). Llama WSAA -> obtiene
-     * token+sign, luego WSFE -> obtiene CAE. Guarda CAE, fecha de vencimiento y
-     * estado "AUTORIZADA" en la factura.
-     */
+    // ------------------------------------------------------------- INFORMAR A ARCA
     @Transactional
     public FacturaReporteDTO informarArca(Long id) throws Exception {
         FacturaVenta factura = buscarFactura(id);
-        
-        LocalDate fecha = factura.getFechaEmision() != null ? factura.getFechaEmision() : LocalDate.now();
-        String fechaEmision = fecha.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
 
+        if ("X".equalsIgnoreCase(factura.getLetra())) {
+            throw new OperacionNoPermitidaException("Las Factura 'X' son comprobantes internos no fiscales y no pueden ser informadas a ARCA.");
+        }
         if (ESTADO_ANULADA.equalsIgnoreCase(factura.getEstado())) {
             throw new OperacionNoPermitidaException("No se puede informar a ARCA una factura ANULADA.");
         }
@@ -153,6 +159,9 @@ public class FacturaService {
         String[] tokenSign = afipWsaaService.obtenerTokenYSign();
         String token = tokenSign[0];
         String sign = tokenSign[1];
+
+        LocalDate fecha = factura.getFechaEmision() != null ? factura.getFechaEmision() : LocalDate.now();
+        String fechaEmision = fecha.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
 
         Long cuitCliente = null;
         if (factura.getCliente() != null && factura.getCliente().getCuitCuil() != null) {
@@ -191,21 +200,24 @@ public class FacturaService {
                 .orElseThrow(() -> new RecursoNoEncontradoException("CondicionIva", request.getCondicionIvaId())));
         factura.setTipoMoneda(tipoMonedaRepository.findById(request.getTipoMonedaId())
                 .orElseThrow(() -> new RecursoNoEncontradoException("TipoMoneda", request.getTipoMonedaId())));
+        factura.setListaPrecio(listaPrecioRepository.findById(request.getListaPrecioId())
+                .orElseThrow(() -> new RecursoNoEncontradoException("ListaPrecio", request.getListaPrecioId())));
         factura.setCliente(request.getClienteId() == null ? null
                 : clienteRepository.findById(request.getClienteId())
                         .orElseThrow(() -> new RecursoNoEncontradoException("Cliente", request.getClienteId())));
 
-        reemplazarDetalles(factura, request.getDetalles());
+        reemplazarDetalles(factura, request.getDetalles(), request.getListaPrecioId());
     }
 
-    private void reemplazarDetalles(FacturaVenta factura, List<FacturaDetalleRequestDTO> items) {
+    private void reemplazarDetalles(FacturaVenta factura, List<FacturaDetalleRequestDTO> items, Long listaPrecioId) {
         factura.getDetalles().clear();
 
         double total = 0.0;
         for (FacturaDetalleRequestDTO item : items) {
             ListaPrecioArticulo precio = listaPrecioArticuloRepository
-                    .findFirstByArticuloIdOrderByIdAsc(item.getArticuloId())
-                    .orElseThrow(() -> new RecursoNoEncontradoException("Precio del articulo", item.getArticuloId()));
+                    .findByListaPrecioIdAndArticuloId(listaPrecioId, item.getArticuloId())
+                    .orElseGet(() -> listaPrecioArticuloRepository.findFirstByArticuloIdOrderByIdAsc(item.getArticuloId())
+                    .orElseThrow(() -> new RecursoNoEncontradoException("Precio del artículo", item.getArticuloId())));
 
             double precioUnitario = precio.getPrecioVenta();
             double neto = redondear(item.getCantidad() * precioUnitario * (1 - (item.getPorcentajeBonificacion() / 100.0)));
@@ -236,7 +248,24 @@ public class FacturaService {
         return Math.round(valor * 100.0) / 100.0;
     }
 
-private FacturaReporteDTO aReporteDto(FacturaVenta f) {
+    @Transactional(readOnly = true)
+    public PaginaDTO<FacturaReporteDTO> buscarFacturasPaginadas(
+            Long numeroFactura, LocalDate fechaDesde, LocalDate fechaHasta,
+            String cliente, String estado, Boolean informadaArca, int pagina, int tamanio) {
+        return facturaRepository.buscarFacturasPaginadas(numeroFactura, fechaDesde, fechaHasta, cliente, estado, informadaArca, pagina, tamanio);
+    }
+
+    @Transactional(readOnly = true)
+    public FacturaVentaDTO obtener(Long id) {
+        return aDetalleDto(buscarFactura(id));
+    }
+
+    @Transactional(readOnly = true)
+    public List<FacturaReporteDTO> buscarFacturasFiltradas(LocalDate fechaDesde, LocalDate fechaHasta, String estado, Double montoMinimo) {
+        return facturaRepository.buscarFacturasFiltradas(fechaDesde, fechaHasta, estado, montoMinimo);
+    }
+
+    private FacturaReporteDTO aReporteDto(FacturaVenta f) {
         return new FacturaReporteDTO(
                 f.getId(),
                 f.getNumero(),

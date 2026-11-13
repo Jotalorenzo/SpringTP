@@ -47,12 +47,15 @@ public class FacturaPdfService {
         Font fontCae = new Font(Font.HELVETICA, 9, Font.BOLD);
 
         // Determinación de Letra de Factura (A para Responsables Inscriptos, B para Consumidor Final)
-        String letra = "B";
+        String letra = factura.getLetra() != null ? factura.getLetra().toUpperCase() : "B";
         String codAfip = "COD. 06";
-        if (factura.getCliente() != null && factura.getCondicionIva() != null 
-                && factura.getCondicionIva().getDenominacion().contains("Responsable")) {
-            letra = "A";
+
+        if ("X".equalsIgnoreCase(letra)) {
+            codAfip = "NO FISCAL";
+        } else if ("A".equalsIgnoreCase(letra)) {
             codAfip = "COD. 01";
+        } else if ("C".equalsIgnoreCase(letra)) {
+            codAfip = "COD. 11";
         }
 
         // ==========================================
@@ -182,16 +185,19 @@ public class FacturaPdfService {
         cPieIzq.setPadding(8f);
         cPieIzq.setBorder(PdfPCell.BOX);
 
-        if (factura.getCae() != null && !factura.getCae().isBlank()) {
+        if ("X".equalsIgnoreCase(letra)) {
+            cPieIzq.addElement(new Phrase("DOCUMENTO NO FISCAL - PRESUPUESTO", fontCae));
+            cPieIzq.addElement(new Phrase("Comprobante interno emitido sin validez tributaria.", fontTexto));
+        } else if (factura.getCae() != null && !factura.getCae().isBlank()) {
             cPieIzq.addElement(new Phrase("CAE N°: " + factura.getCae(), fontCae));
-            String vto = factura.getCaeFechaVencimiento() != null 
-                    ? factura.getCaeFechaVencimiento().format(FORMATO_FECHA) 
+            String vto = factura.getCaeFechaVencimiento() != null
+                    ? factura.getCaeFechaVencimiento().format(FORMATO_FECHA)
                     : "N/A";
             cPieIzq.addElement(new Phrase("Fecha de Vto. de CAE: " + vto, fontCae));
             cPieIzq.addElement(new Phrase("Comprobante Autorizado por ARCA (ex AFIP)", fontTexto));
         } else {
             cPieIzq.addElement(new Phrase("COMPROBANTE NO FISCAL", fontCae));
-            cPieIzq.addElement(new Phrase("Documento de uso interno / No informado a ARCA", fontTexto));
+            cPieIzq.addElement(new Phrase("Documento en estado borrador / No informado a ARCA", fontTexto));
         }
         tablaPie.addCell(cPieIzq);
 
