@@ -31,7 +31,7 @@ public class FacturaRequestDTO {
     @NotNull(message = "El puntoVentaId es obligatorio")
     private Long puntoVentaId;
 
-    @NotNull(message = "El condicionIvaId es obligatorio")
+    //@NotNull(message = "El condicionIvaId es obligatorio")
     private Long condicionIvaId;
 
     @NotNull(message = "El tipoMonedaId es obligatorio")

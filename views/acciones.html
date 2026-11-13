@@ -1,0 +1,27 @@
+<div class="actions-bar">
+  <!-- Se muestra al crear una factura desde cero -->
+  <button id="btnGuardarFactura" class="btn-primary">💾 Crear Borrador</button>
+
+  <!-- Se muestra al editar una factura existente que NO fue informada a ARCA -->
+  <button id="btnActualizarFactura" class="btn-primary" style="display: none">
+    💾 Guardar Cambios
+  </button>
+
+  <!-- Botón para autorizar en AFIP/ARCA -->
+  <button id="btnInformarArca" class="btn-arca" style="display: none">
+    🏛️ Informar a ARCA
+  </button>
+
+  <!-- PDF siempre disponible para facturas guardadas -->
+  <button id="btnImprimirPdf" class="btn-outline" style="display: none">
+    📄 Imprimir Factura (PDF)
+  </button>
+
+  <!-- Bajas lógica y física -->
+  <button id="btnAnularFactura" class="btn-warning" style="display: none">
+    Anular Factura
+  </button>
+  <button id="btnEliminarFactura" class="btn-danger" style="display: none">
+    Eliminar Borrador
+  </button>
+</div>

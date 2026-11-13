@@ -1,0 +1,146 @@
+<div class="section" id="seccionFormulario">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+    <h3 id="tituloFormulario" style="margin: 0;">Nueva Factura de Venta</h3>
+    <button type="button" id="btnCerrarFormulario" class="btn-outline">✕ Cerrar</button>
+  </div>
+
+  <!-- Cartel informativo cuando la factura NO se puede editar (Informada a ARCA o Anulada) -->
+  <div
+    id="bannerSoloLectura"
+    style="
+      display: none;
+      background-color: #fef3c7;
+      border-left: 4px solid #f59e0b;
+      color: #92400e;
+      padding: 10px 14px;
+      margin-bottom: 15px;
+      border-radius: 4px;
+      font-size: 0.95em;
+    "
+  >
+    🔒 <strong>Modo Solo Lectura:</strong> Este comprobante ya fue informado a ARCA (posee CAE) o se encuentra anulado, por lo que no permite modificaciones.
+  </div>
+
+  <div class="filtros-grid">
+    <!-- Número autogenerado (Última factura + 1) -->
+    <div class="form-group">
+      <label>Número de Factura (Autogenerado):</label>
+      <input
+        type="number"
+        id="numeroFacturaInput"
+        readonly
+        placeholder="Calculando siguiente número..."
+        style="background-color: #f3f4f6; font-weight: bold;"
+      />
+    </div>
+
+    <!-- Fecha editable -->
+    <div class="form-group">
+      <label>Fecha de Emisión:</label>
+      <input type="date" id="fechaEmisionInput" />
+    </div>
+
+    <!-- Tipo de Factura -->
+    <div class="form-group">
+      <label>Tipo de Factura:</label>
+      <select id="tipoComprobanteSelect">
+        <option value="1">Factura A</option>
+        <option value="6" selected>Factura B</option>
+        <option value="11">Factura C</option>
+      </select>
+    </div>
+
+    <!-- Lista de Precios -->
+    <div class="form-group">
+      <label>Lista de Precios:</label>
+      <select id="listaPrecioSelect">
+        <option value="MINORISTA" selected>Lista Minorista</option>
+        <option value="MAYORISTA">Lista Mayorista</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Punto de Venta:</label>
+      <select id="puntoVentaSelect">
+        <option value="">Cargando...</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Moneda:</label>
+      <select id="monedaSelect">
+        <option value="">Cargando...</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Solo Explorer para Cliente -->
+  <div class="form-group" style="margin-top: 10px;">
+    <label>Cliente:</label>
+    <div style="display: flex; gap: 8px">
+      <input type="hidden" id="clienteIdHidden" />
+      <input
+        type="text"
+        id="clienteNombreInput"
+        readonly
+        placeholder="Seleccione un cliente desde el Explorer..."
+        style="flex: 1; background-color: #f9fafb;"
+      />
+      <button type="button" id="btnAbrirModalCliente" class="btn-outline">
+        🔍 Explorer Clientes
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- DETALLE DE ARTÍCULOS -->
+<div class="section" id="seccionDetalles">
+  <h3>Detalle de Artículos</h3>
+
+  <!-- Barra para agregar productos (se oculta sola si la factura ya está en ARCA) -->
+  <div
+    id="barraAgregarArticulo"
+    style="display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 15px;"
+  >
+    <div style="flex: 1; min-width: 250px">
+      <label>Artículo:</label>
+      <div style="display: flex; gap: 8px">
+        <input type="hidden" id="articuloIdHidden" />
+        <input
+          type="text"
+          id="articuloNombreInput"
+          readonly
+          placeholder="Busque un artículo con el Explorer..."
+          style="flex: 1; background-color: #f9fafb;"
+        />
+        <button type="button" id="btnAbrirModalArticulo" class="btn-outline">
+          🔍 Explorer Artículos
+        </button>
+      </div>
+    </div>
+
+    <div style="width: 120px">
+      <label>Cantidad:</label>
+      <input type="number" id="cantidadInput" min="1" value="1" />
+    </div>
+    <button type="button" id="btnAgregarLinea" class="btn-outline">+ Agregar</button>
+  </div>
+
+  <!-- Tabla de Artículos Cargados -->
+  <table id="tablaDetalles">
+    <thead>
+      <tr>
+        <th>Producto</th>
+        <th>Precio Unit.</th>
+        <th>Cantidad</th>
+        <th>Subtotal</th>
+        <th>Acción</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <div style="text-align: right; margin-top: 12px; font-size: 1.15em; font-weight: bold;">
+    Total Estimado: $<span id="totalFacturaEstimado">0.00</span>
+  </div>
+</div>
