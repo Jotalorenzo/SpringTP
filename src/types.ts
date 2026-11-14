@@ -4,16 +4,19 @@ export interface ClienteDTO {
   denominacion?: string;
 }
 
-export interface ArticuloDTO {
-  id: number;
-  codigo?: string;
-  denominacion?: string;
+export interface ArticuloPrecioDTO {
+  articuloId: number;
+  listaPrecioArticuloId: number;
+  codigo: string;
+  denominacion: string;
+  precioVenta: number;
 }
 
 export interface PuntoVentaDTO {
   id: number;
   numero: number;
   descripcion?: string;
+  domicilioComercial?: string;
 }
 
 export interface TipoMonedaDTO {
@@ -21,6 +24,18 @@ export interface TipoMonedaDTO {
   codigoAfip?: string;
   denominacion: string;
   simbolo?: string;
+}
+
+export interface ListaPrecioDTO {
+  id: number;
+  codigo: string;
+  denominacion: string;
+}
+
+export interface CondicionIvaDTO {
+  id: number;
+  codigoAfip: number;
+  denominacion: string;
 }
 
 export interface FacturaDetalleRequestDTO {
@@ -36,6 +51,8 @@ export interface FacturaRequestDTO {
   puntoVentaId: number;
   condicionIvaId: number;
   tipoMonedaId: number;
+  listaPrecioId: number;
+  letra: string;
   clienteId?: number | null;
   detalles: FacturaDetalleRequestDTO[];
 }
@@ -65,7 +82,7 @@ export interface FacturaVentaDetalleDTO {
   id?: number;
   articuloId: number;
   articuloDenominacion: string;
-  descripcion?: string; 
+  descripcion?: string;
   cantidad: number;
   precioUnitario: number;
   importeSubtotal: number;
@@ -77,6 +94,7 @@ export interface FacturaVentaDTO {
   fechaEmision: string;
   puntoVentaId: number;
   clienteId?: number;
+  clienteDenominacion?: string;
   tipoMonedaId: number;
   condicionIvaId: number;
   importeTotal: number;

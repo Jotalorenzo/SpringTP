@@ -1,82 +1,70 @@
 const API_URL = "http://localhost:8080/api/facturas";
 export const facturaService = {
-    crearFactura: async (facturaReq) => {
-        const response = await fetch(API_URL, {
+    crearFactura: async (req) => {
+        const res = await fetch(API_URL, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(facturaReq),
+            body: JSON.stringify(req),
         });
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.message || err.error || `Error ${res.status}`);
         }
-        return response.json();
+        return res.json();
     },
-    obtenerFacturaPorId: async (id) => {
-        const response = await fetch(`${API_URL}/${id}`);
-        if (!response.ok) {
-            throw new Error(`No se pudo obtener la factura con ID ${id}`);
-        }
-        return response.json();
-    },
-    actualizarFactura: async (id, facturaReq) => {
-        const response = await fetch(`${API_URL}/${id}`, {
+    actualizarFactura: async (id, req) => {
+        const res = await fetch(`${API_URL}/${id}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(facturaReq),
+            body: JSON.stringify(req),
         });
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.message || `Error al actualizar: ${response.statusText}`);
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.message || err.error || `Error ${res.status}`);
         }
-        return response.json();
+        return res.json();
+    },
+    obtenerFacturaPorId: async (id) => {
+        const res = await fetch(`${API_URL}/${id}`);
+        if (!res.ok)
+            throw new Error(`No se pudo obtener la factura ${id}`);
+        return res.json();
     },
     anularFactura: async (id) => {
-        const response = await fetch(`${API_URL}/${id}/anular`, {
-            method: "PUT",
-        });
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.message || `Error al anular: ${response.statusText}`);
+        const res = await fetch(`${API_URL}/${id}/anular`, { method: "PUT" });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || err.message || "Error al anular");
         }
-        return response.json();
+        return res.json();
     },
     eliminarFactura: async (id) => {
-        const response = await fetch(`${API_URL}/${id}`, {
-            method: "DELETE",
-        });
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.message || `Error al eliminar factura.`);
+        const res = await fetch(`${API_URL}/${id}`, { method: "DELETE" });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || err.message || "Error al eliminar");
         }
     },
-    obtenerClientes: async () => {
-        const response = await fetch(`${API_URL}/clientes`);
-        return response.ok ? response.json() : [];
-    },
-    obtenerArticulos: async () => {
-        const response = await fetch(`${API_URL}/articulos`);
-        return response.ok ? response.json() : [];
-    },
-    obtenerPuntosVenta: async () => {
-        const response = await fetch(`${API_URL}/puntos-venta`);
-        return response.ok ? response.json() : [];
-    },
-    obtenerTiposMoneda: async () => {
-        const response = await fetch(`${API_URL}/tipos-moneda`);
-        return response.ok ? response.json() : [];
+    informarArca: async (id) => {
+        const res = await fetch(`${API_URL}/${id}/informar-arca`, {
+            method: "PUT",
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || err.message || "Error al informar a ARCA");
+        }
+        return res.json();
     },
     descargarFacturaIndividualPdf: async (id) => {
-        const response = await fetch(`${API_URL}/${id}/pdf`);
-        if (!response.ok) {
-            throw new Error(`Error al generar el PDF de la factura ID ${id}`);
-        }
-        return response.blob();
+        const res = await fetch(`${API_URL}/${id}/pdf`);
+        if (!res.ok)
+            throw new Error("Error al descargar PDF");
+        return res.blob();
     },
     buscarFacturasPaginadas: async (filtros) => {
         const params = new URLSearchParams();
         if (filtros.numeroFactura)
-            params.append("numeroFactura", filtros.numeroFactura.toString());
+            params.append("numeroFactura", String(filtros.numeroFactura));
         if (filtros.fechaDesde)
             params.append("fechaDesde", filtros.fechaDesde);
         if (filtros.fechaHasta)
@@ -89,20 +77,33 @@ export const facturaService = {
             params.append("informadaArca", String(filtros.informadaArca));
         params.append("page", String(filtros.page || 0));
         params.append("size", String(filtros.size || 5));
-        const response = await fetch(`${API_URL}?${params.toString()}`);
-        if (!response.ok)
-            throw new Error("Error al consultar las facturas.");
-        return response.json();
+        const res = await fetch(`${API_URL}?${params.toString()}`);
+        if (!res.ok)
+            throw new Error("Error al consultar facturas");
+        return res.json();
     },
-    // Agregar en facturaService dentro de SpringTP/src/facturaService.ts:
-    informarArca: async (id) => {
-        const response = await fetch(`${API_URL}/${id}/informar-arca`, {
-            method: "PUT",
-        });
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error || errorData.message || `Error al informar a ARCA`);
-        }
-        return response.json();
+    buscarClientesExplorer: async (q) => {
+        const res = await fetch(`${API_URL}/clientes/buscar?q=${encodeURIComponent(q || "")}`);
+        return res.ok ? res.json() : [];
+    },
+    buscarArticulosExplorer: async (listaPrecioId, q) => {
+        const res = await fetch(`${API_URL}/articulos/buscar?listaPrecioId=${listaPrecioId}&q=${encodeURIComponent(q || "")}`);
+        return res.ok ? res.json() : [];
+    },
+    obtenerListasPrecio: async () => {
+        const res = await fetch(`${API_URL}/listas-precio`);
+        return res.ok ? res.json() : [];
+    },
+    obtenerCondicionesIva: async () => {
+        const res = await fetch(`${API_URL}/condiciones-iva`);
+        return res.ok ? res.json() : [];
+    },
+    obtenerPuntosVenta: async () => {
+        const res = await fetch(`${API_URL}/puntos-venta`);
+        return res.ok ? res.json() : [];
+    },
+    obtenerTiposMoneda: async () => {
+        const res = await fetch(`${API_URL}/tipos-moneda`);
+        return res.ok ? res.json() : [];
     },
 };

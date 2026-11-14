@@ -3,22 +3,27 @@
   <div class="modal-box">
     <div class="modal-header">
       <h4>Explorer de Clientes</h4>
-      <button type="button" class="btn-close" id="btnCerrarModalCliente">&times;</button>
+      <button type="button" class="btn-close" id="btnCerrarModalCliente">
+        &times;
+      </button>
     </div>
     <div style="display: flex; gap: 10px; margin-bottom: 10px">
-  <input
-    type="text"
-    id="filtroModalClienteNombre"
-    placeholder="Filtrar por nombre..."
-    style="flex: 1"
-  />
-  <input
-    type="text"
-    id="filtroModalClienteCuit"
-    placeholder="Filtrar por CUIT/CUIL..."
-    style="flex: 1"
-  />
-</div>
+      <input
+        type="text"
+        id="filtroModalClienteNombre"
+        placeholder="Filtrar por nombre..."
+        style="flex: 1"
+      />
+      <input
+        type="text"
+        id="filtroModalClienteCuit"
+        placeholder="Filtrar por CUIT/CUIL..."
+        style="flex: 1"
+      />
+      <button type="button" id="btnBuscarModalCliente" class="btn-buscar">
+        Buscar
+      </button>
+    </div>
     <div style="max-height: 250px; overflow-y: auto">
       <table id="tablaModalClientes">
         <thead>
@@ -40,14 +45,21 @@
   <div class="modal-box">
     <div class="modal-header">
       <h4>Explorer de Artículos</h4>
-      <button type="button" class="btn-close" id="btnCerrarModalArticulo">&times;</button>
+      <button type="button" class="btn-close" id="btnCerrarModalArticulo">
+        &times;
+      </button>
     </div>
-    <input
-      type="text"
-      id="filtroModalArticulo"
-      placeholder="Filtrar por código o descripción..."
-      style="margin-bottom: 10px"
-    />
+    <div style="display: flex; gap: 10px; margin-bottom: 10px">
+      <input
+        type="text"
+        id="filtroModalArticulo"
+        placeholder="Filtrar por código o descripción..."
+        style="flex: 1"
+      />
+      <button type="button" id="btnBuscarModalArticulo" class="btn-buscar">
+        Buscar
+      </button>
+    </div>
     <div style="max-height: 250px; overflow-y: auto">
       <table id="tablaModalArticulos">
         <thead>

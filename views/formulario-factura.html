@@ -1,7 +1,16 @@
 <div class="section" id="seccionFormulario">
-  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-    <h3 id="tituloFormulario" style="margin: 0;">Nueva Factura de Venta</h3>
-    <button type="button" id="btnCerrarFormulario" class="btn-outline">✕ Cerrar</button>
+  <div
+    style="
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    "
+  >
+    <h3 id="tituloFormulario" style="margin: 0">Nueva Factura de Venta</h3>
+    <button type="button" id="btnCerrarFormulario" class="btn-outline">
+      ✕ Cerrar
+    </button>
   </div>
 
   <!-- Cartel informativo cuando la factura NO se puede editar (Informada a ARCA o Anulada) -->
@@ -18,19 +27,21 @@
       font-size: 0.95em;
     "
   >
-    🔒 <strong>Modo Solo Lectura:</strong> Este comprobante ya fue informado a ARCA (posee CAE) o se encuentra anulado, por lo que no permite modificaciones.
+    🔒 <strong>Modo Solo Lectura:</strong> Este comprobante ya fue informado a
+    ARCA (posee CAE) o se encuentra anulado, por lo que no permite
+    modificaciones.
   </div>
 
   <div class="filtros-grid">
     <!-- Número autogenerado (Última factura + 1) -->
     <div class="form-group">
-      <label>Número de Factura (Autogenerado):</label>
+      <label>Número de Factura:</label>
       <input
-        type="number"
+        type="text"
         id="numeroFacturaInput"
         readonly
-        placeholder="Calculando siguiente número..."
-        style="background-color: #f3f4f6; font-weight: bold;"
+        placeholder="Se asigna al informar a ARCA"
+        style="background-color: #e5e7eb; font-weight: bold"
       />
     </div>
 
@@ -44,9 +55,10 @@
     <div class="form-group">
       <label>Tipo de Factura:</label>
       <select id="tipoComprobanteSelect">
-        <option value="1">Factura A</option>
-        <option value="6" selected>Factura B</option>
-        <option value="11">Factura C</option>
+        <option value="B" selected>Factura B (Consumidor Final)</option>
+        <option value="A">Factura A (Resp. Inscripto)</option>
+        <option value="C">Factura C (Monotributo / Oficial)</option>
+        <option value="X">Factura X (Presupuesto / No Fiscal)</option>
       </select>
     </div>
 
@@ -75,7 +87,7 @@
   </div>
 
   <!-- Solo Explorer para Cliente -->
-  <div class="form-group" style="margin-top: 10px;">
+  <div class="form-group" style="margin-top: 10px">
     <label>Cliente:</label>
     <div style="display: flex; gap: 8px">
       <input type="hidden" id="clienteIdHidden" />
@@ -84,7 +96,7 @@
         id="clienteNombreInput"
         readonly
         placeholder="Seleccione un cliente desde el Explorer..."
-        style="flex: 1; background-color: #f9fafb;"
+        style="flex: 1; background-color: #f9fafb"
       />
       <button type="button" id="btnAbrirModalCliente" class="btn-outline">
         🔍 Explorer Clientes
@@ -100,7 +112,13 @@
   <!-- Barra para agregar productos (se oculta sola si la factura ya está en ARCA) -->
   <div
     id="barraAgregarArticulo"
-    style="display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 15px;"
+    style="
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+      flex-wrap: wrap;
+      margin-bottom: 15px;
+    "
   >
     <div style="flex: 1; min-width: 250px">
       <label>Artículo:</label>
@@ -111,7 +129,7 @@
           id="articuloNombreInput"
           readonly
           placeholder="Busque un artículo con el Explorer..."
-          style="flex: 1; background-color: #f9fafb;"
+          style="flex: 1; background-color: #f9fafb"
         />
         <button type="button" id="btnAbrirModalArticulo" class="btn-outline">
           🔍 Explorer Artículos
@@ -123,7 +141,9 @@
       <label>Cantidad:</label>
       <input type="number" id="cantidadInput" min="1" value="1" />
     </div>
-    <button type="button" id="btnAgregarLinea" class="btn-outline">+ Agregar</button>
+    <button type="button" id="btnAgregarLinea" class="btn-outline">
+      + Agregar
+    </button>
   </div>
 
   <!-- Tabla de Artículos Cargados -->
@@ -140,7 +160,14 @@
     <tbody></tbody>
   </table>
 
-  <div style="text-align: right; margin-top: 12px; font-size: 1.15em; font-weight: bold;">
+  <div
+    style="
+      text-align: right;
+      margin-top: 12px;
+      font-size: 1.15em;
+      font-weight: bold;
+    "
+  >
     Total Estimado: $<span id="totalFacturaEstimado">0.00</span>
   </div>
 </div>

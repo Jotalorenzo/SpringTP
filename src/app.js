@@ -1,458 +1,428 @@
 import { facturaService } from "./facturaService.js";
-
 let detallesActuales = [];
 let facturaSeleccionadaId = null;
-let facturaEditable = true;
 let paginaActual = 0;
-let listaClientes = [];
-let listaArticulos = [];
-
-// 1. Cargador modular de vistas HTML
-async function cargarVistasHTML() {
-  const vistas = [
-    { id: "vista-historial", url: "./views/historial.html" },
-    { id: "vista-formulario", url: "./views/formulario-factura.html" },
-    { id: "vista-acciones", url: "./views/acciones.html" },
-    { id: "vista-modales", url: "./views/modales.html" },
-  ];
-
-  await Promise.all(
-    vistas.map(async (v) => {
-      const resp = await fetch(v.url);
-      const html = await resp.text();
-      document.getElementById(v.id).innerHTML = html;
-    })
-  );
-}
-
+let modoSoloLectura = false;
+// Al cargar la página, primero inyectamos las vistas HTML modulares y luego inicializamos la lógica
 document.addEventListener("DOMContentLoaded", async () => {
-  await cargarVistasHTML();
-  await inicializarFormulario();
-  configurarEventos();
+  await cargarVistasModulares();
+  await inicializarParametricas();
+  configurarEventosGenerales();
   configurarModalesExplorer();
   await cargarGrillaFacturas();
 });
-
-async function inicializarFormulario() {
+// Carga las vistas modulares creadas en la carpeta /views
+async function cargarVistasModulares() {
   try {
-    const [clientes, puntosVenta, monedas, articulos] = await Promise.all([
-      facturaService.obtenerClientes(),
+    const [historialHtml, formularioHtml, accionesHtml, modalesHtml] =
+      await Promise.all([
+        fetch("./views/historial.html").then((r) => r.text()),
+        fetch("./views/formulario-factura.html").then((r) => r.text()),
+        fetch("./views/acciones.html").then((r) => r.text()),
+        fetch("./views/modales.html").then((r) => r.text()),
+      ]);
+    document.getElementById("vista-historial").innerHTML = historialHtml;
+    document.getElementById("vista-formulario").innerHTML = formularioHtml;
+    document.getElementById("vista-acciones").innerHTML = accionesHtml;
+    document.getElementById("vista-modales").innerHTML = modalesHtml;
+  } catch (error) {
+    console.error("Error al cargar las vistas modulares HTML:", error);
+  }
+}
+async function inicializarParametricas() {
+  try {
+    const [puntos, monedas, listas] = await Promise.all([
       facturaService.obtenerPuntosVenta(),
       facturaService.obtenerTiposMoneda(),
-      facturaService.obtenerArticulos(),
+      facturaService.obtenerListasPrecio(),
     ]);
-    listaClientes = clientes;
-    listaArticulos = articulos;
-
-    llenarSelect("puntoVentaSelect", puntosVenta, "id", "descripcion", true);
-    llenarSelect("monedaSelect", monedas, "id", "denominacion", true);
-  } catch (error) {
-    console.error("Error al cargar paramétricas:", error);
+    const pvSelect = document.getElementById("puntoVentaSelect");
+    if (pvSelect) {
+      pvSelect.innerHTML = puntos
+        .map(
+          (p) =>
+            `<option value="${p.id}">Pto Venta N° ${p.numero} - ${p.descripcion || ""}</option>`,
+        )
+        .join("");
+    }
+    const monSelect = document.getElementById("monedaSelect");
+    if (monSelect) {
+      monSelect.innerHTML = monedas
+        .map((m) => `<option value="${m.id}">${m.denominacion}</option>`)
+        .join("");
+    }
+    const lpSelect = document.getElementById("listaPrecioSelect");
+    if (lpSelect) {
+      lpSelect.innerHTML = listas
+        .map((l) => `<option value="${l.id}">${l.denominacion}</option>`)
+        .join("");
+    }
+    const fechaInput = document.getElementById("fechaEmisionInput");
+    if (fechaInput) {
+      fechaInput.value = new Date().toISOString().split("T")[0];
+    }
+  } catch (e) {
+    console.error("Error al cargar paramétricas iniciales", e);
   }
 }
-
-function llenarSelect(selectId, items, valueProp, textProp, seleccionarPrimero = false) {
-  const select = document.getElementById(selectId);
-  if (!select) return;
-  select.innerHTML = '<option value="">Seleccione una opción...</option>';
-  items.forEach((item, index) => {
-    const option = document.createElement("option");
-    option.value = String(item[valueProp]);
-    option.textContent = item[textProp] || `ID: ${item[valueProp]}`;
-    if (seleccionarPrimero && index === 0) {
-      option.selected = true;
-    }
-    select.appendChild(option);
-  });
-}
-
-async function calcularSiguienteNumeroFactura() {
-  try {
-    const pagina = await facturaService.buscarFacturasPaginadas({
-      informadaArca: true,
-      page: 0,
-      size: 1000,
-    });
-    const facturasConCae = (pagina.contenido || []).filter((f) => f.cae);
-
-    if (facturasConCae.length === 0) return 1;
-
-    facturasConCae.sort((a, b) => b.id - a.id);
-
-    const ultimaInformada = facturasConCae[0];
-    const ultimoNumero = parseInt(
-      ultimaInformada.numeroFactura ?? ultimaInformada.numero ?? 0,
-      10
-    );
-
-    return !isNaN(ultimoNumero) ? ultimoNumero + 1 : 1;
-  } catch (error) {
-    console.error("Error al calcular el siguiente número de factura de ARCA:", error);
-    return 1;
-  }
-}
-
-function configurarEventos() {
-  // Abrir panel de Nueva Factura y autogenerar el Número (Última + 1)
-  document.getElementById("btnAbrirNuevaFactura")?.addEventListener("click", async () => {
-    await resetearFormulario();
-    document.getElementById("tituloFormulario").textContent = "Nueva Factura de Venta";
-    document.getElementById("contenedor-panel-factura").style.display = "block";
-    document.getElementById("contenedor-panel-factura").scrollIntoView({ behavior: "smooth" });
-  });
-
-  document.getElementById("btnCerrarFormulario")?.addEventListener("click", () => {
-    document.getElementById("contenedor-panel-factura").style.display = "none";
-  });
-
-  // Recalcular precios si cambia la Lista de Precios
-  document.getElementById("listaPrecioSelect")?.addEventListener("change", () => {
-    if (facturaEditable) {
-      recalcularPreciosPorLista();
-    }
-  });
-
-  document.getElementById("btnAgregarLinea")?.addEventListener("click", agregarLinea);
-  document.getElementById("btnGuardarFactura")?.addEventListener("click", enviarFactura);
-  document.getElementById("btnActualizarFactura")?.addEventListener("click", actualizarFacturaExistente);
-
+function configurarEventosGenerales() {
+  // Botones de Apertura y Cierre del Formulario
+  document
+    .getElementById("btnAbrirNuevaFactura")
+    ?.addEventListener("click", abrirFormularioParaCrear);
+  document
+    .getElementById("btnCerrarFormulario")
+    ?.addEventListener("click", cerrarFormulario);
+  // Acciones de Guardar
+  document
+    .getElementById("btnGuardarFactura")
+    ?.addEventListener("click", () => guardarOActualizarFactura(false));
+  document
+    .getElementById("btnActualizarFactura")
+    ?.addEventListener("click", () => guardarOActualizarFactura(true));
+  // Filtros y Paginación de la Grilla
   document.getElementById("btnFiltrar")?.addEventListener("click", () => {
     paginaActual = 0;
     cargarGrillaFacturas();
   });
-  document.getElementById("btnLimpiarFiltros")?.addEventListener("click", limpiarFiltros);
-  document.getElementById("btnPaginaAnterior")?.addEventListener("click", () => {
-    if (paginaActual > 0) {
-      paginaActual--;
-      cargarGrillaFacturas();
-    }
-  });
-  document.getElementById("btnPaginaSiguiente")?.addEventListener("click", () => {
-    paginaActual++;
-    cargarGrillaFacturas();
-  });
-
-  document.getElementById("btnInformarArca")?.addEventListener("click", informarArca);
-  document.getElementById("btnAnularFactura")?.addEventListener("click", anularFactura);
-  document.getElementById("btnEliminarFactura")?.addEventListener("click", eliminarFactura);
-  document.getElementById("btnImprimirPdf")?.addEventListener("click", imprimirPdf);
-}
-
-// -------------------------------------------------------------
-// CONTROL DE MODO EDICIÓN vs SOLO LECTURA (ARCA / ANULADA)
-// -------------------------------------------------------------
-function configurarModoEdicion(editable) {
-  facturaEditable = editable;
-
-  document.getElementById("fechaEmisionInput").disabled = !editable;
-  document.getElementById("tipoComprobanteSelect").disabled = !editable;
-  document.getElementById("listaPrecioSelect").disabled = !editable;
-  document.getElementById("puntoVentaSelect").disabled = !editable;
-  document.getElementById("monedaSelect").disabled = !editable;
-  document.getElementById("btnAbrirModalCliente").disabled = !editable;
-
-  const barraArt = document.getElementById("barraAgregarArticulo");
-  if (barraArt) barraArt.style.display = editable ? "flex" : "none";
-
-  const banner = document.getElementById("bannerSoloLectura");
-  if (banner) banner.style.display = editable ? "none" : "block";
-}
-
-// -------------------------------------------------------------
-// LÓGICA DE INTERFACES EXPLORER (MODALES)
-// -------------------------------------------------------------
-function configurarModalesExplorer() {
-  const modalCli = document.getElementById("modalCliente");
-  const inputNombre = document.getElementById("filtroModalClienteNombre");
-  const inputCuit = document.getElementById("filtroModalClienteCuit");
-
-  const filtrarClientes = () => {
-    renderizarTablaModalClientes(inputNombre?.value || "", inputCuit?.value || "");
-  };
-
-  document.getElementById("btnAbrirModalCliente")?.addEventListener("click", () => {
-    if (!facturaEditable) return;
-    if (inputNombre) inputNombre.value = "";
-    if (inputCuit) inputCuit.value = "";
-    renderizarTablaModalClientes("", "");
-    modalCli.style.display = "flex";
-  });
-  document.getElementById("btnCerrarModalCliente")?.addEventListener("click", () => {
-    modalCli.style.display = "none";
-  });
-  inputNombre?.addEventListener("input", filtrarClientes);
-  inputCuit?.addEventListener("input", filtrarClientes);
-
-  const modalArt = document.getElementById("modalArticulo");
-  document.getElementById("btnAbrirModalArticulo")?.addEventListener("click", () => {
-    if (!facturaEditable) return;
-    renderizarTablaModalArticulos("");
-    modalArt.style.display = "flex";
-  });
-  document.getElementById("btnCerrarModalArticulo")?.addEventListener("click", () => {
-    modalArt.style.display = "none";
-  });
-  document.getElementById("filtroModalArticulo")?.addEventListener("input", (e) => {
-    renderizarTablaModalArticulos(e.target.value);
-  });
-}
-
-function renderizarTablaModalClientes(filtroNombre = "", filtroCuit = "") {
-  const tbody = document.querySelector("#tablaModalClientes tbody");
-  tbody.innerHTML = "";
-  const termNombre = filtroNombre.toLowerCase().trim();
-  const termCuit = filtroCuit.toLowerCase().trim();
-
-  const filtrados = listaClientes.filter((c) => {
-    const coincideNombre = !termNombre || (c.denominacion && c.denominacion.toLowerCase().includes(termNombre));
-    const coincideCuit = !termCuit || (c.cuitCuil && String(c.cuitCuil).toLowerCase().includes(termCuit));
-    return coincideNombre && coincideCuit;
-  });
-
-  filtrados.forEach((c) => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${c.id}</td>
-      <td>${c.denominacion || ""}</td>
-      <td>${c.cuitCuil || "Consumidor Final"}</td>
-      <td><button type="button" class="btn-primary" style="padding: 4px 8px;" onclick="seleccionarClienteModal(${c.id})">Elegir</button></td>
-    `;
-    tbody.appendChild(tr);
-  });
-}
-
-window.seleccionarClienteModal = (id) => {
-  const cliente = listaClientes.find((c) => c.id === id);
-  document.getElementById("clienteIdHidden").value = String(id);
-  document.getElementById("clienteNombreInput").value = cliente
-    ? `${cliente.denominacion} (${cliente.cuitCuil || "CF"})`
-    : `ID: ${id}`;
-  document.getElementById("modalCliente").style.display = "none";
-};
-
-function obtenerPreciosArticulo(articulo) {
-  const base = Number(articulo.precioVenta ?? articulo.precio ?? 0);
-  const minorista = Number(articulo.precioMinorista ?? base);
-  const mayorista = Number(articulo.precioMayorista ?? (minorista * 0.85).toFixed(2));
-  return { minorista, mayorista };
-}
-
-function renderizarTablaModalArticulos(filtro) {
-  const tbody = document.querySelector("#tablaModalArticulos tbody");
-  tbody.innerHTML = "";
-  const termino = filtro.toLowerCase().trim();
-  const filtrados = listaArticulos.filter(
-    (a) =>
-      (a.denominacion && a.denominacion.toLowerCase().includes(termino)) ||
-      (a.codigo && a.codigo.toLowerCase().includes(termino))
-  );
-  filtrados.forEach((a) => {
-    const precios = obtenerPreciosArticulo(a);
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${a.id}</td>
-      <td>${a.codigo || ""}</td>
-      <td>${a.denominacion || ""}</td>
-      <td>$${precios.minorista.toFixed(2)}</td>
-      <td>$${precios.mayorista.toFixed(2)}</td>
-      <td><button type="button" class="btn-primary" style="padding: 4px 8px;" onclick="seleccionarArticuloModal(${a.id})">Elegir</button></td>
-    `;
-    tbody.appendChild(tr);
-  });
-}
-
-window.seleccionarArticuloModal = (id) => {
-  const art = listaArticulos.find((a) => a.id === id);
-  document.getElementById("articuloIdHidden").value = String(id);
-  document.getElementById("articuloNombreInput").value = art
-    ? `${art.codigo ? "[" + art.codigo + "] " : ""}${art.denominacion}`
-    : `ID: ${id}`;
-  document.getElementById("modalArticulo").style.display = "none";
-};
-
-function agregarLinea() {
-  if (!facturaEditable) return;
-
-  const articuloId = parseInt(document.getElementById("articuloIdHidden").value);
-  const cantidad = parseInt(document.getElementById("cantidadInput").value);
-  const tipoLista = document.getElementById("listaPrecioSelect").value;
-
-  if (isNaN(articuloId) || isNaN(cantidad) || cantidad <= 0) {
-    alert("Seleccione un artículo válido desde el Explorer y una cantidad mayor a 0.");
-    return;
-  }
-
-  const art = listaArticulos.find((a) => a.id === articuloId);
-  const precios = art ? obtenerPreciosArticulo(art) : { minorista: 0, mayorista: 0 };
-  const precioUnitario = tipoLista === "MAYORISTA" ? precios.mayorista : precios.minorista;
-
-  const existente = detallesActuales.find((d) => d.articuloId === articuloId);
-  if (existente) {
-    existente.cantidad += cantidad;
-    existente.precioUnitario = precioUnitario;
-  } else {
-    detallesActuales.push({
-      articuloId,
-      nombre: art ? art.denominacion : `Artículo #${articuloId}`,
-      precioUnitario,
-      cantidad,
+  document
+    .getElementById("btnLimpiarFiltros")
+    ?.addEventListener("click", limpiarFiltros);
+  document
+    .getElementById("btnPaginaAnterior")
+    ?.addEventListener("click", () => {
+      if (paginaActual > 0) {
+        paginaActual--;
+        cargarGrillaFacturas();
+      }
     });
-  }
-
+  document
+    .getElementById("btnPaginaSiguiente")
+    ?.addEventListener("click", () => {
+      paginaActual++;
+      cargarGrillaFacturas();
+    });
+  // Acciones sobre Factura
+  document
+    .getElementById("btnInformarArca")
+    ?.addEventListener("click", informarArca);
+  document
+    .getElementById("btnAnularFactura")
+    ?.addEventListener("click", anularFactura);
+  document
+    .getElementById("btnEliminarFactura")
+    ?.addEventListener("click", eliminarFactura);
+  document
+    .getElementById("btnImprimirPdf")
+    ?.addEventListener("click", imprimirPdf);
+  // Agregar Renglón
+  document
+    .getElementById("btnAgregarLinea")
+    ?.addEventListener("click", agregarLineaDetalle);
+}
+function abrirFormularioParaCrear() {
+  facturaSeleccionadaId = null;
+  detallesActuales = [];
+  limpiarCamposFormulario();
+  document.getElementById("tituloFormulario").textContent =
+    "Nueva Factura de Venta";
+  document.getElementById("btnGuardarFactura").style.display = "inline-block";
+  document.getElementById("btnActualizarFactura").style.display = "none";
+  document.getElementById("btnInformarArca").style.display = "none";
+  document.getElementById("btnAnularFactura").style.display = "none";
+  document.getElementById("btnEliminarFactura").style.display = "none";
+  document.getElementById("btnImprimirPdf").style.display = "none";
+  document.getElementById("bannerSoloLectura").style.display = "none";
+  habilitarEdicionFormulario(true);
+  const panel = document.getElementById("contenedor-panel-factura");
+  panel.style.display = "block";
+  panel.scrollIntoView({ behavior: "smooth" });
+}
+function cerrarFormulario() {
+  document.getElementById("contenedor-panel-factura").style.display = "none";
+}
+function limpiarCamposFormulario() {
+  document.getElementById("numeroFacturaInput").value = "";
+  document.getElementById("clienteIdHidden").value = "";
+  document.getElementById("clienteNombreInput").value = "";
   document.getElementById("articuloIdHidden").value = "";
   document.getElementById("articuloNombreInput").value = "";
   document.getElementById("cantidadInput").value = "1";
-
-  actualizarTablaUI();
+  document.getElementById("fechaEmisionInput").value = new Date()
+    .toISOString()
+    .split("T")[0];
+  actualizarTablaDetallesUI();
 }
-
-function recalcularPreciosPorLista() {
-  const tipoLista = document.getElementById("listaPrecioSelect").value;
-  detallesActuales = detallesActuales.map((det) => {
-    const art = listaArticulos.find((a) => a.id === det.articuloId);
-    if (!art) return det;
-    const precios = obtenerPreciosArticulo(art);
-    return {
-      ...det,
-      precioUnitario: tipoLista === "MAYORISTA" ? precios.mayorista : precios.minorista,
-    };
+function habilitarEdicionFormulario(habilitar) {
+  modoSoloLectura = !habilitar;
+  actualizarTablaDetallesUI();
+  const inputs = document.querySelectorAll(
+    "#seccionFormulario select, #seccionFormulario input:not([readonly]), #barraAgregarArticulo input",
+  );
+  inputs.forEach((el) => (el.disabled = !habilitar));
+  document.getElementById("btnAbrirModalCliente").disabled = !habilitar;
+  document.getElementById("btnAbrirModalArticulo").disabled = !habilitar;
+  document.getElementById("btnAgregarLinea").disabled = !habilitar;
+  const barraAgregar = document.getElementById("barraAgregarArticulo");
+  barraAgregar.style.display = habilitar ? "flex" : "none";
+}
+// ------------------------------------------------------------- LÓGICA DE EXPLORER MODALES
+function configurarModalesExplorer() {
+  // Explorer Clientes
+  const modalCli = document.getElementById("modalCliente");
+  document
+    .getElementById("btnAbrirModalCliente")
+    ?.addEventListener("click", () => {
+      modalCli.style.display = "flex";
+      ejecutarBusquedaClientes();
+    });
+  document
+    .getElementById("btnCerrarModalCliente")
+    ?.addEventListener("click", () => {
+      modalCli.style.display = "none";
+    });
+  // La búsqueda se dispara SOLO con el botón Buscar (o Enter), no letra por letra
+  const buscarClientes = () => {
+    const nombre =
+      document.getElementById("filtroModalClienteNombre")?.value.trim() || "";
+    const cuit =
+      document.getElementById("filtroModalClienteCuit")?.value.trim() || "";
+    ejecutarBusquedaClientes(nombre || cuit);
+  };
+  document
+    .getElementById("btnBuscarModalCliente")
+    ?.addEventListener("click", buscarClientes);
+  ["filtroModalClienteNombre", "filtroModalClienteCuit"].forEach((id) => {
+    document.getElementById(id)?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") buscarClientes();
+    });
   });
-  actualizarTablaUI();
+  // Explorer Artículos
+  const modalArt = document.getElementById("modalArticulo");
+  document
+    .getElementById("btnAbrirModalArticulo")
+    ?.addEventListener("click", () => {
+      const lpSelect = document.getElementById("listaPrecioSelect");
+      if (!lpSelect || !lpSelect.value) {
+        alert("Debe seleccionar primero una Lista de Precios.");
+        return;
+      }
+      modalArt.style.display = "flex";
+      ejecutarBusquedaArticulos();
+    });
+  document
+    .getElementById("btnCerrarModalArticulo")
+    ?.addEventListener("click", () => {
+      modalArt.style.display = "none";
+    });
+  const buscarArticulos = () => {
+    const filtro =
+      document.getElementById("filtroModalArticulo")?.value.trim() || "";
+    ejecutarBusquedaArticulos(filtro);
+  };
+  document
+    .getElementById("btnBuscarModalArticulo")
+    ?.addEventListener("click", buscarArticulos);
+  document
+    .getElementById("filtroModalArticulo")
+    ?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") buscarArticulos();
+    });
 }
-
-function actualizarTablaUI() {
+async function ejecutarBusquedaClientes(filtro = "") {
+  const tbody = document.querySelector("#tablaModalClientes tbody");
+  tbody.innerHTML =
+    '<tr><td colspan="4" style="text-align:center;">Buscando clientes en base de datos...</td></tr>';
+  try {
+    const clientes = await facturaService.buscarClientesExplorer(filtro);
+    if (clientes.length === 0) {
+      tbody.innerHTML =
+        '<tr><td colspan="4" style="text-align:center;">No se encontraron clientes.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = clientes
+      .map(
+        (c) => `
+        <tr>
+          <td>${c.id}</td>
+          <td>${c.denominacion || ""}</td>
+          <td>${c.cuitCuil || "Consumidor Final"}</td>
+          <td>
+            <button type="button" class="btn-primary" style="padding: 4px 8px;" onclick="seleccionarClienteExplorer(${c.id}, '${(c.denominacion || "").replace(/'/g, "\\'")}')">
+              Elegir
+            </button>
+          </td>
+        </tr>
+      `,
+      )
+      .join("");
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="4" style="color:red; text-align:center;">Error: ${err.message}</td></tr>`;
+  }
+}
+window.seleccionarClienteExplorer = (id, denominacion) => {
+  document.getElementById("clienteIdHidden").value = String(id);
+  document.getElementById("clienteNombreInput").value =
+    `${denominacion} (ID: ${id})`;
+  document.getElementById("modalCliente").style.display = "none";
+};
+async function ejecutarBusquedaArticulos(filtro = "") {
+  const lpId =
+    parseInt(document.getElementById("listaPrecioSelect").value) || 1;
+  const tbody = document.querySelector("#tablaModalArticulos tbody");
+  tbody.innerHTML =
+    '<tr><td colspan="6" style="text-align:center;">Buscando artículos en catálogo...</td></tr>';
+  try {
+    const articulos = await facturaService.buscarArticulosExplorer(
+      lpId,
+      filtro,
+    );
+    if (articulos.length === 0) {
+      tbody.innerHTML =
+        '<tr><td colspan="6" style="text-align:center;">No se encontraron artículos para esta lista.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = articulos
+      .map(
+        (a) => `
+        <tr>
+          <td>${a.articuloId}</td>
+          <td>${a.codigo}</td>
+          <td>${a.denominacion}</td>
+          <td>$${a.precioVenta.toFixed(2)}</td>
+          <td>$${(a.precioVenta * 0.77).toFixed(2)}</td>
+          <td>
+            <button type="button" class="btn-primary" style="padding: 4px 8px;" onclick="seleccionarArticuloExplorer(${a.articuloId}, '${a.codigo}', '${a.denominacion.replace(/'/g, "\\'")}', ${a.precioVenta})">
+              Elegir
+            </button>
+          </td>
+        </tr>
+      `,
+      )
+      .join("");
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="6" style="color:red; text-align:center;">Error: ${err.message}</td></tr>`;
+  }
+}
+window.seleccionarArticuloExplorer = (id, codigo, denominacion, precio) => {
+  const artInput = document.getElementById("articuloNombreInput");
+  artInput.value = `[${codigo}] ${denominacion} - $${precio.toFixed(2)}`;
+  artInput.dataset.precio = String(precio);
+  document.getElementById("articuloIdHidden").value = String(id);
+  document.getElementById("modalArticulo").style.display = "none";
+};
+// ------------------------------------------------------------- DETALLE DE RENGLONES
+function agregarLineaDetalle() {
+  if (modoSoloLectura) return;
+  const artId = parseInt(document.getElementById("articuloIdHidden").value);
+  const artNombreInput = document.getElementById("articuloNombreInput");
+  const precio = parseFloat(artNombreInput.dataset.precio || "0");
+  const cantidad = parseInt(document.getElementById("cantidadInput").value);
+  if (
+    isNaN(artId) ||
+    isNaN(cantidad) ||
+    cantidad <= 0 ||
+    isNaN(precio) ||
+    precio <= 0
+  ) {
+    alert(
+      "Debe seleccionar un artículo válido con el Explorer y una cantidad mayor a 0.",
+    );
+    return;
+  }
+  const subtotal = cantidad * precio * 1.21;
+  detallesActuales.push({
+    articuloId: artId,
+    nombre: artNombreInput.value,
+    precioUnitario: precio,
+    cantidad,
+    subtotal,
+  });
+  artNombreInput.value = "";
+  artNombreInput.dataset.precio = "";
+  document.getElementById("articuloIdHidden").value = "";
+  actualizarTablaDetallesUI();
+}
+function actualizarTablaDetallesUI() {
   const tbody = document.querySelector("#tablaDetalles tbody");
   tbody.innerHTML = "";
   let total = 0;
-
-  detallesActuales.forEach((detalle, index) => {
-    const subtotal = (detalle.precioUnitario || 0) * detalle.cantidad;
-    total += subtotal;
-
-    const celdaCantidad = facturaEditable
-      ? `<input type="number" min="1" value="${detalle.cantidad}" style="width: 70px; padding: 4px;" onchange="cambiarCantidadLinea(${index}, this.value)" />`
-      : `${detalle.cantidad}`;
-
-    const botonQuitar = facturaEditable
-      ? `<button type="button" class="btn-danger" style="padding: 4px 8px;" onclick="eliminarLinea(${index})">Quitar</button>`
-      : `<span style="color: #9ca3af; font-size: 0.9em;">🔒 Fijo</span>`;
-
+  detallesActuales.forEach((det, index) => {
+    total += det.subtotal;
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${detalle.nombre || `ID: ${detalle.articuloId}`}</td>
-      <td>$${(detalle.precioUnitario || 0).toFixed(2)}</td>
-      <td>${celdaCantidad}</td>
-      <td>$${subtotal.toFixed(2)}</td>
-      <td>${botonQuitar}</td>
+      <td>${det.nombre}</td>
+      <td>$${det.precioUnitario.toFixed(2)}</td>
+      <td>${det.cantidad}</td>
+      <td>$${det.subtotal.toFixed(2)}</td>
+      <td>${
+        modoSoloLectura
+          ? "—"
+          : `<button type="button" class="btn-danger" style="padding: 3px 8px;" onclick="quitarLinea(${index})">✕</button>`
+      }</td>
     `;
     tbody.appendChild(tr);
   });
-
-  document.getElementById("totalFacturaEstimado").textContent = total.toFixed(2);
+  const totalEl = document.getElementById("totalFacturaEstimado");
+  if (totalEl) totalEl.textContent = total.toFixed(2);
 }
-
-window.cambiarCantidadLinea = (index, nuevaCant) => {
-  if (!facturaEditable) return;
-  const cant = parseInt(nuevaCant);
-  if (isNaN(cant) || cant <= 0) {
-    alert("La cantidad debe ser al menos 1.");
-    actualizarTablaUI();
+window.quitarLinea = (index) => {
+  if (modoSoloLectura) return; // defensa extra
+  detallesActuales.splice(index, 1);
+  actualizarTablaDetallesUI();
+};
+// ------------------------------------------------------------- GUARDAR Y ACTUALIZAR
+async function guardarOActualizarFactura(esActualizacion) {
+  const pvId = parseInt(document.getElementById("puntoVentaSelect").value);
+  const monId = parseInt(document.getElementById("monedaSelect").value);
+  const lpId =
+    parseInt(document.getElementById("listaPrecioSelect").value) || 1;
+  const letra = document.getElementById("tipoComprobanteSelect").value || "B";
+  const fecha = document.getElementById("fechaEmisionInput").value;
+  const clienteIdVal = document.getElementById("clienteIdHidden").value;
+  if (!fecha || isNaN(pvId)) {
+    alert("Punto de Venta y Fecha de Emisión son obligatorios.");
     return;
   }
-  detallesActuales[index].cantidad = cant;
-  actualizarTablaUI();
-};
-
-window.eliminarLinea = (index) => {
-  if (!facturaEditable) return;
-  detallesActuales.splice(index, 1);
-  actualizarTablaUI();
-};
-
-function construirPayloadFactura() {
-  const numInput = document.getElementById("numeroFacturaInput").value;
-  const numero = numInput ? parseInt(numInput, 10) : undefined;
-  const clienteId = parseInt(document.getElementById("clienteIdHidden").value, 10);
-  const puntoVentaId = parseInt(document.getElementById("puntoVentaSelect").value, 10);
-  const tipoMonedaId = parseInt(document.getElementById("monedaSelect").value, 10);
-  const fechaEmision = document.getElementById("fechaEmisionInput").value;
-  const tipoComprobanteId = parseInt(document.getElementById("tipoComprobanteSelect").value, 10);
-  const listaPrecio = document.getElementById("listaPrecioSelect").value;
-
-  if (!fechaEmision) {
-    alert("Debe seleccionar una fecha de emisión.");
-    return null;
-  }
-  if (isNaN(puntoVentaId) || isNaN(tipoMonedaId)) {
-    alert("Punto de Venta y Moneda son obligatorios.");
-    return null;
-  }
   if (detallesActuales.length === 0) {
-    alert("La factura debe tener al menos un artículo.");
-    return null;
+    alert("La factura debe tener al menos un artículo cargado.");
+    return;
   }
-
-  return {
-    numero: !isNaN(numero) ? numero : undefined,
-    fechaEmision,
-    tipoComprobanteId,
-    listaPrecio,
+  const payload = {
+    fechaEmision: fecha,
+    puntoVentaId: pvId,
     condicionIvaId: 1,
-    clienteId: isNaN(clienteId) ? null : clienteId,
-    puntoVentaId,
-    tipoMonedaId,
+    tipoMonedaId: monId || 1,
+    listaPrecioId: lpId,
+    letra: letra,
+    clienteId: clienteIdVal ? parseInt(clienteIdVal) : null,
     detalles: detallesActuales.map((d) => ({
       articuloId: d.articuloId,
       cantidad: d.cantidad,
-      precioUnitario: d.precioUnitario,
     })),
   };
-}
-
-// ALTA (POST)
-async function enviarFactura() {
-  const payload = construirPayloadFactura();
-  if (!payload) return;
-
   try {
-    const respuesta = await facturaService.crearFactura(payload);
-    alert(`¡Factura N° ${payload.numero || ""} creada exitosamente! (ID: ${respuesta.id})`);
-    document.getElementById("contenedor-panel-factura").style.display = "none";
+    if (esActualizacion && facturaSeleccionadaId) {
+      await facturaService.actualizarFactura(facturaSeleccionadaId, payload);
+      alert("¡Factura actualizada exitosamente!");
+    } else {
+      const creada = await facturaService.crearFactura(payload);
+      alert(`¡Factura guardada exitosamente con ID: ${creada.id}!`);
+    }
+    cerrarFormulario();
     await cargarGrillaFacturas();
-  } catch (error) {
-    alert("Error al guardar: " + error.message);
+  } catch (err) {
+    alert("Error: " + err.message);
   }
 }
-
-// ACTUALIZACIÓN / EDICIÓN (PUT)
-async function actualizarFacturaExistente() {
-  if (!facturaSeleccionadaId) return;
-  if (!facturaEditable) {
-    alert("No se puede editar una factura que ya fue informada a ARCA o está anulada.");
-    return;
-  }
-
-  const payload = construirPayloadFactura();
-  if (!payload) return;
-
-  try {
-    await facturaService.actualizarFactura(facturaSeleccionadaId, payload);
-    alert("¡Factura actualizada correctamente!");
-    await window.seleccionarFactura(facturaSeleccionadaId);
-    await cargarGrillaFacturas();
-  } catch (error) {
-    alert("Error al actualizar: " + error.message);
-  }
-}
-
+// ------------------------------------------------------------- GRILLA DE HISTORIAL
 async function cargarGrillaFacturas() {
-  const filtroNumero = document.getElementById("filtroNumero").value;
-  const filtroCliente = document.getElementById("filtroCliente").value;
-  const filtroFechaDesde = document.getElementById("filtroFechaDesde").value;
-  const filtroFechaHasta = document.getElementById("filtroFechaHasta").value;
-  const filtroEstado = document.getElementById("filtroEstado").value;
-  const filtroArca = document.getElementById("filtroArca").value;
-
+  const filtroNumero = document.getElementById("filtroNumero")?.value;
+  const filtroCliente = document.getElementById("filtroCliente")?.value;
+  const filtroFechaDesde = document.getElementById("filtroFechaDesde")?.value;
+  const filtroFechaHasta = document.getElementById("filtroFechaHasta")?.value;
+  const filtroEstado = document.getElementById("filtroEstado")?.value;
+  const filtroArca = document.getElementById("filtroArca")?.value;
   try {
     const pagina = await facturaService.buscarFacturasPaginadas({
       numeroFactura: filtroNumero ? parseInt(filtroNumero) : undefined,
@@ -460,20 +430,25 @@ async function cargarGrillaFacturas() {
       fechaDesde: filtroFechaDesde || undefined,
       fechaHasta: filtroFechaHasta || undefined,
       estado: filtroEstado || undefined,
-      informadaArca: filtroArca !== "" ? filtroArca === "true" : undefined,
+      informadaArca:
+        filtroArca !== "" && filtroArca !== undefined
+          ? filtroArca === "true"
+          : undefined,
       page: paginaActual,
       size: 5,
     });
     renderizarTablaFacturas(pagina.contenido);
-    document.getElementById("infoPaginacion").textContent =
-      `Página ${pagina.pagina + 1} de ${pagina.totalPaginas || 1}`;
+    const pagSpan = document.getElementById("infoPaginacion");
+    if (pagSpan) {
+      pagSpan.textContent = `Página ${pagina.pagina + 1} de ${pagina.totalPaginas || 1}`;
+    }
   } catch (error) {
-    console.error("Error al cargar facturas:", error);
+    console.error("Error al cargar la grilla de facturas:", error);
   }
 }
-
 function renderizarTablaFacturas(facturas) {
   const tbody = document.querySelector("#tablaGrillaFacturas tbody");
+  if (!tbody) return;
   tbody.innerHTML = "";
   if (facturas.length === 0) {
     tbody.innerHTML =
@@ -487,169 +462,153 @@ function renderizarTablaFacturas(facturas) {
       : `<span class="tag-no-arca">Sin CAE</span>`;
     tr.innerHTML = `
       <td>${f.id}</td>
-      <td>${f.numeroFactura ?? f.numero ?? "Borrador"}</td>
+      <td>${f.numeroFactura || "Borrador"}</td>
       <td>${f.fechaEmision}</td>
       <td>${f.clienteDenominacion}</td>
       <td>$${f.importeTotal.toFixed(2)}</td>
       <td><span class="${f.estado === "ANULADA" ? "tag-anulada" : ""}">${f.estado}</span></td>
       <td>${badgeArca}</td>
-      <td><button class="btn-outline" style="padding: 4px 8px;" onclick="seleccionarFactura(${f.id})">Ver / Editar</button></td>
+      <td>
+        <button class="btn-outline" style="padding: 4px 8px;" onclick="seleccionarFactura(${f.id})">
+          Ver / Gestionar
+        </button>
+      </td>
     `;
     tbody.appendChild(tr);
   });
 }
-
 window.seleccionarFactura = async (id) => {
   try {
-    const factura = await facturaService.obtenerFacturaPorId(id);
-    facturaSeleccionadaId = factura.id;
-
-    // Regla de negocio: Solo se puede editar si NO está informada a ARCA (sin CAE) y NO está ANULADA
-    const puedeEditar = !factura.cae && factura.estado !== "ANULADA";
-    configurarModoEdicion(puedeEditar);
-
-    document.getElementById("tituloFormulario").textContent = puedeEditar
-      ? `Editar Factura #${factura.id}`
-      : `Visualizar Factura #${factura.id} (${factura.cae ? "Autorizada ARCA" : factura.estado})`;
-
+    const f = await facturaService.obtenerFacturaPorId(id);
+    facturaSeleccionadaId = f.id;
+    document.getElementById("numeroFacturaInput").value = f.numero
+      ? String(f.numero)
+      : "Borrador";
+    document.getElementById("fechaEmisionInput").value = f.fechaEmision;
+    document.getElementById("puntoVentaSelect").value = String(f.puntoVentaId);
+    document.getElementById("monedaSelect").value = String(f.tipoMonedaId);
+    if (f.clienteId) {
+      document.getElementById("clienteIdHidden").value = String(f.clienteId);
+      document.getElementById("clienteNombreInput").value =
+        `${f.clienteDenominacion} (ID: ${f.clienteId})`;
+    } else {
+      document.getElementById("clienteIdHidden").value = "";
+      document.getElementById("clienteNombreInput").value = "Consumidor Final";
+    }
+    detallesActuales = f.detalles.map((d) => ({
+      articuloId: d.articuloId,
+      nombre: d.descripcion || d.articuloDenominacion,
+      precioUnitario: d.precioUnitario,
+      cantidad: d.cantidad,
+      subtotal: d.importeSubtotal,
+    }));
+    actualizarTablaDetallesUI();
+    document.getElementById("tituloFormulario").textContent =
+      `Factura #${f.numero || "Borrador"} (ID: ${f.id})`;
     document.getElementById("contenedor-panel-factura").style.display = "block";
-
-    const numActual = factura.numero ?? factura.numeroFactura;
-    document.getElementById("numeroFacturaInput").value = numActual ? String(numActual) : "";
-    document.getElementById("fechaEmisionInput").value = factura.fechaEmision || "";
-
-    if (factura.tipoComprobanteId) {
-      document.getElementById("tipoComprobanteSelect").value = String(factura.tipoComprobanteId);
-    }
-    if (factura.listaPrecio) {
-      document.getElementById("listaPrecioSelect").value = factura.listaPrecio;
-    }
-
-    const cli = listaClientes.find((c) => c.id === factura.clienteId);
-    document.getElementById("clienteIdHidden").value = factura.clienteId ? String(factura.clienteId) : "";
-    document.getElementById("clienteNombreInput").value = cli
-      ? `${cli.denominacion} (${cli.cuitCuil || "CF"})`
-      : factura.clienteDenominacion || "";
-
-    document.getElementById("puntoVentaSelect").value = String(factura.puntoVentaId);
-    document.getElementById("monedaSelect").value = String(factura.tipoMonedaId);
-
-    detallesActuales = factura.detalles.map((d) => {
-      const art = listaArticulos.find((a) => a.id === d.articuloId);
-      return {
-        articuloId: d.articuloId,
-        nombre: d.descripcion || (art ? art.denominacion : `Artículo #${d.articuloId}`),
-        precioUnitario: d.precioUnitario || (art ? obtenerPreciosArticulo(art).minorista : 0),
-        cantidad: d.cantidad,
-      };
-    });
-    actualizarTablaUI();
-
-    // Visibilidad de botones según el estado
+    const tieneCae = Boolean(f.cae);
+    const esAnulada = f.estado === "ANULADA";
+    habilitarEdicionFormulario(!tieneCae && !esAnulada);
     document.getElementById("btnGuardarFactura").style.display = "none";
-    document.getElementById("btnActualizarFactura").style.display = puedeEditar ? "inline-block" : "none";
-    document.getElementById("btnInformarArca").style.display = puedeEditar ? "inline-block" : "none";
-    document.getElementById("btnImprimirPdf").style.display = "inline-block";
-
-    document.getElementById("btnAnularFactura").style.display =
-      factura.estado !== "ANULADA" ? "inline-block" : "none";
-
+    document.getElementById("btnActualizarFactura").style.display =
+      !tieneCae && !esAnulada ? "inline-block" : "none";
+    document.getElementById("btnInformarArca").style.display =
+      !tieneCae && !esAnulada ? "inline-block" : "none";
     document.getElementById("btnEliminarFactura").style.display =
-      !factura.cae ? "inline-block" : "none";
-
-    document.getElementById("contenedor-panel-factura").scrollIntoView({ behavior: "smooth" });
+      !f.numero && !tieneCae ? "inline-block" : "none";
+    document.getElementById("btnImprimirPdf").style.display = "inline-block";
+    // GESTIÓN DEL BOTÓN ANULAR:
+    const btnAnular = document.getElementById("btnAnularFactura");
+    if (btnAnular) {
+      if (esAnulada) {
+        btnAnular.style.display = "none";
+      } else if (tieneCae) {
+        // Si ya tiene CAE, se muestra pero bloqueado (no presionable)
+        btnAnular.style.display = "inline-block";
+        btnAnular.disabled = true;
+        btnAnular.title =
+          "No se puede anular un comprobante que ya posee CAE de ARCA.";
+        btnAnular.style.opacity = "0.5";
+        btnAnular.style.cursor = "not-allowed";
+      } else {
+        btnAnular.style.display = "inline-block";
+        btnAnular.disabled = false;
+        btnAnular.title = "";
+        btnAnular.style.opacity = "1";
+        btnAnular.style.cursor = "pointer";
+      }
+    }
+    const banner = document.getElementById("bannerSoloLectura");
+    banner.style.display = tieneCae || esAnulada ? "block" : "none";
+    document
+      .getElementById("contenedor-panel-factura")
+      .scrollIntoView({ behavior: "smooth" });
   } catch (e) {
-    alert("Error al cargar la factura: " + e.message);
+    alert("Error al cargar factura: " + e.message);
   }
 };
-
 async function informarArca() {
   if (!facturaSeleccionadaId) return;
-  if (!confirm("¿Desea enviar este comprobante a ARCA / AFIP para obtener el CAE oficial? Una vez autorizado no podrá editarse.")) return;
+  if (
+    !confirm(
+      "¿Desea enviar este comprobante a ARCA / AFIP para obtener el CAE oficial?",
+    )
+  )
+    return;
   try {
     const res = await facturaService.informarArca(facturaSeleccionadaId);
-    alert(`¡Comprobante Autorizado por ARCA!\nCAE: ${res.cae}\nNúmero Oficial: ${res.numeroFactura}`);
+    alert(
+      `¡Comprobante Autorizado por ARCA!\nCAE: ${res.cae}\nNúmero: ${res.numeroFactura}`,
+    );
     await window.seleccionarFactura(facturaSeleccionadaId);
     await cargarGrillaFacturas();
   } catch (err) {
     alert("Error de ARCA: " + err.message);
   }
 }
-
 async function anularFactura() {
   if (!facturaSeleccionadaId) return;
+  const btnAnular = document.getElementById("btnAnularFactura");
+  if (btnAnular && btnAnular.disabled) {
+    alert(
+      "Operación denegada: No se puede anular una factura que ya posee CAE oficial de ARCA.",
+    );
+    return;
+  }
   if (!confirm("¿Confirma la anulación lógica de la factura?")) return;
   try {
     await facturaService.anularFactura(facturaSeleccionadaId);
-    alert("Factura anulada.");
+    alert("Factura anulada con éxito.");
     await window.seleccionarFactura(facturaSeleccionadaId);
     await cargarGrillaFacturas();
   } catch (err) {
     alert("Error al anular: " + err.message);
   }
 }
-
 async function eliminarFactura() {
   if (!facturaSeleccionadaId) return;
-  if (!confirm("¿Eliminar físicamente esta factura?")) return;
+  if (!confirm("¿Eliminar físicamente el borrador?")) return;
   try {
     await facturaService.eliminarFactura(facturaSeleccionadaId);
     alert("Factura eliminada.");
-    document.getElementById("contenedor-panel-factura").style.display = "none";
+    cerrarFormulario();
     await cargarGrillaFacturas();
   } catch (err) {
     alert("Error al eliminar: " + err.message);
   }
 }
-
 async function imprimirPdf() {
   if (!facturaSeleccionadaId) return;
   try {
-    const blob = await facturaService.descargarFacturaIndividualPdf(facturaSeleccionadaId);
+    const blob = await facturaService.descargarFacturaIndividualPdf(
+      facturaSeleccionadaId,
+    );
     const url = window.URL.createObjectURL(blob);
     window.open(url, "_blank");
   } catch (err) {
     alert("Error al abrir PDF: " + err.message);
   }
 }
-
-async function resetearFormulario() {
-  facturaSeleccionadaId = null;
-  detallesActuales = [];
-  configurarModoEdicion(true);
-
-  // Calcula automáticamente el número de la última factura + 1
-  const siguienteNumero = await calcularSiguienteNumeroFactura();
-  document.getElementById("numeroFacturaInput").value = String(siguienteNumero);
-
-  document.getElementById("fechaEmisionInput").value = new Date().toISOString().split("T")[0];
-  document.getElementById("clienteIdHidden").value = "";
-  document.getElementById("clienteNombreInput").value = "";
-  document.getElementById("articuloIdHidden").value = "";
-  document.getElementById("articuloNombreInput").value = "";
-  document.getElementById("tipoComprobanteSelect").value = "6";
-  document.getElementById("listaPrecioSelect").value = "MINORISTA";
-
-  // Asegurar que Punto de Venta y Moneda queden en la primera opción válida
-  const pvSelect = document.getElementById("puntoVentaSelect");
-  if (pvSelect && pvSelect.options.length > 1 && !pvSelect.value) {
-    pvSelect.selectedIndex = 1;
-  }
-  const monSelect = document.getElementById("monedaSelect");
-  if (monSelect && monSelect.options.length > 1 && !monSelect.value) {
-    monSelect.selectedIndex = 1;
-  }
-
-  actualizarTablaUI();
-
-  document.getElementById("btnGuardarFactura").style.display = "inline-block";
-  document.getElementById("btnActualizarFactura").style.display = "none";
-  document.getElementById("btnInformarArca").style.display = "none";
-  document.getElementById("btnAnularFactura").style.display = "none";
-  document.getElementById("btnEliminarFactura").style.display = "none";
-  document.getElementById("btnImprimirPdf").style.display = "none";
-}
-
 function limpiarFiltros() {
   document.getElementById("filtroNumero").value = "";
   document.getElementById("filtroCliente").value = "";
