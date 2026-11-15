@@ -11,6 +11,7 @@ interface LineaDetalleUI {
   nombre: string;
   precioUnitario: number;
   cantidad: number;
+  porcentajeBonificacion: number;
   subtotal: number;
 }
 
@@ -18,12 +19,14 @@ let detallesActuales: LineaDetalleUI[] = [];
 let facturaSeleccionadaId: number | null = null;
 let paginaActual = 0;
 let modoSoloLectura = false;
+let listaPrecioSeleccionadaPrevia = "2"; // Default Minorista
 
-// Al cargar la página, primero inyectamos las vistas HTML modulares y luego inicializamos la lógica
 document.addEventListener("DOMContentLoaded", async () => {
   await cargarVistasModulares();
   await inicializarParametricas();
   configurarEventosGenerales();
+  configurarControlListaPrecios();
+  configurarControlClienteInput();
   configurarModalesExplorer();
   await cargarGrillaFacturas();
 });
@@ -84,6 +87,9 @@ async function inicializarParametricas() {
       lpSelect.innerHTML = listas
         .map((l) => `<option value="${l.id}">${l.denominacion}</option>`)
         .join("");
+      if (listas.length > 0) {
+        listaPrecioSeleccionadaPrevia = String(listas[0].id);
+      }
     }
 
     const fechaInput = document.getElementById(
@@ -98,7 +104,6 @@ async function inicializarParametricas() {
 }
 
 function configurarEventosGenerales() {
-  // Botones de Apertura y Cierre del Formulario
   document
     .getElementById("btnAbrirNuevaFactura")
     ?.addEventListener("click", abrirFormularioParaCrear);
@@ -106,7 +111,6 @@ function configurarEventosGenerales() {
     .getElementById("btnCerrarFormulario")
     ?.addEventListener("click", cerrarFormulario);
 
-  // Acciones de Guardar
   document
     .getElementById("btnGuardarFactura")
     ?.addEventListener("click", () => guardarOActualizarFactura(false));
@@ -114,7 +118,7 @@ function configurarEventosGenerales() {
     .getElementById("btnActualizarFactura")
     ?.addEventListener("click", () => guardarOActualizarFactura(true));
 
-  // Filtros y Paginación de la Grilla
+  // Paginación y Filtros
   document.getElementById("btnFiltrar")?.addEventListener("click", () => {
     paginaActual = 0;
     cargarGrillaFacturas();
@@ -137,7 +141,6 @@ function configurarEventosGenerales() {
       cargarGrillaFacturas();
     });
 
-  // Acciones sobre Factura
   document
     .getElementById("btnInformarArca")
     ?.addEventListener("click", informarArca);
@@ -151,10 +154,72 @@ function configurarEventosGenerales() {
     .getElementById("btnImprimirPdf")
     ?.addEventListener("click", imprimirPdf);
 
-  // Agregar Renglón
   document
     .getElementById("btnAgregarLinea")
     ?.addEventListener("click", agregarLineaDetalle);
+}
+
+// -------------------------------------------------------------
+// REGLA 1: SI CAMBIA LA LISTA DE PRECIOS, SE TIRAN / LIMPIAN LOS ÍTEMS
+// -------------------------------------------------------------
+function configurarControlListaPrecios() {
+  const lpSelect = document.getElementById(
+    "listaPrecioSelect",
+  ) as HTMLSelectElement;
+  if (!lpSelect) return;
+
+  lpSelect.addEventListener("change", () => {
+    if (detallesActuales.length > 0) {
+      const confirma = confirm(
+        "Al cambiar la Lista de Precios se descartarán los artículos agregados para evitar inconsistencias de precios. ¿Desea continuar?",
+      );
+      if (confirma) {
+        detallesActuales = [];
+        actualizarTablaDetallesUI();
+        listaPrecioSeleccionadaPrevia = lpSelect.value;
+      } else {
+        // Revertir a la lista anterior
+        lpSelect.value = listaPrecioSeleccionadaPrevia;
+      }
+    } else {
+      listaPrecioSeleccionadaPrevia = lpSelect.value;
+    }
+  });
+}
+
+// -------------------------------------------------------------
+// REGLA 2: BORRADO DEL CLIENTE DIRECTAMENTE EN EL INPUT
+// -------------------------------------------------------------
+function configurarControlClienteInput() {
+  const cliInput = document.getElementById(
+    "clienteNombreInput",
+  ) as HTMLInputElement;
+  const cliHidden = document.getElementById(
+    "clienteIdHidden",
+  ) as HTMLInputElement;
+  const btnLimpiar = document.getElementById(
+    "btnLimpiarCliente",
+  ) as HTMLButtonElement;
+
+  const limpiarCliente = () => {
+    cliInput.value = "";
+    cliHidden.value = "";
+  };
+
+  btnLimpiar?.addEventListener("click", limpiarCliente);
+
+  // Si el usuario borra el texto con Backspace/Delete o deja en blanco el campo
+  cliInput?.addEventListener("input", () => {
+    if (!cliInput.value.trim()) {
+      cliHidden.value = "";
+    }
+  });
+
+  cliInput?.addEventListener("keydown", (e) => {
+    if (e.key === "Backspace" || e.key === "Delete") {
+      cliHidden.value = "";
+    }
+  });
 }
 
 function abrirFormularioParaCrear() {
@@ -192,6 +257,7 @@ function limpiarCamposFormulario() {
   (document.getElementById("articuloNombreInput") as HTMLInputElement).value =
     "";
   (document.getElementById("cantidadInput") as HTMLInputElement).value = "1";
+  (document.getElementById("descuentoInput") as HTMLInputElement).value = "0";
   (document.getElementById("fechaEmisionInput") as HTMLInputElement).value =
     new Date().toISOString().split("T")[0];
   actualizarTablaDetallesUI();
@@ -209,6 +275,8 @@ function habilitarEdicionFormulario(habilitar: boolean) {
   (
     document.getElementById("btnAbrirModalCliente") as HTMLButtonElement
   ).disabled = !habilitar;
+  (document.getElementById("btnLimpiarCliente") as HTMLButtonElement).disabled =
+    !habilitar;
   (
     document.getElementById("btnAbrirModalArticulo") as HTMLButtonElement
   ).disabled = !habilitar;
@@ -219,7 +287,7 @@ function habilitarEdicionFormulario(habilitar: boolean) {
   barraAgregar.style.display = habilitar ? "flex" : "none";
 }
 
-// ------------------------------------------------------------- LÓGICA DE EXPLORER MODALES
+// ------------------------------------------------------------- EXPLORERS MODALES
 function configurarModalesExplorer() {
   // Explorer Clientes
   const modalCli = document.getElementById("modalCliente")!;
@@ -235,7 +303,6 @@ function configurarModalesExplorer() {
       modalCli.style.display = "none";
     });
 
-  // La búsqueda se dispara SOLO con el botón Buscar (o Enter), no letra por letra
   const buscarClientes = () => {
     const nombre =
       (
@@ -402,7 +469,9 @@ async function ejecutarBusquedaArticulos(filtro: string = "") {
   document.getElementById("modalArticulo")!.style.display = "none";
 };
 
-// ------------------------------------------------------------- DETALLE DE RENGLONES
+// -------------------------------------------------------------
+// REGLA 3 Y 4: DESCUENTO + MODIFICACIÓN DE CANTIDAD EN BORRADOR
+// -------------------------------------------------------------
 function agregarLineaDetalle() {
   if (modoSoloLectura) return;
   const artId = parseInt(
@@ -415,6 +484,10 @@ function agregarLineaDetalle() {
   const cantidad = parseInt(
     (document.getElementById("cantidadInput") as HTMLInputElement).value,
   );
+  const descuento =
+    parseFloat(
+      (document.getElementById("descuentoInput") as HTMLInputElement).value,
+    ) || 0;
 
   if (
     isNaN(artId) ||
@@ -429,18 +502,22 @@ function agregarLineaDetalle() {
     return;
   }
 
-  const subtotal = cantidad * precio * 1.21;
+  const neto = cantidad * precio * (1 - descuento / 100);
+  const subtotal = neto * 1.21;
+
   detallesActuales.push({
     articuloId: artId,
     nombre: artNombreInput.value,
     precioUnitario: precio,
     cantidad,
+    porcentajeBonificacion: descuento,
     subtotal,
   });
 
   artNombreInput.value = "";
   artNombreInput.dataset.precio = "";
   (document.getElementById("articuloIdHidden") as HTMLInputElement).value = "";
+  (document.getElementById("descuentoInput") as HTMLInputElement).value = "0";
   actualizarTablaDetallesUI();
 }
 
@@ -454,10 +531,21 @@ function actualizarTablaDetallesUI() {
   detallesActuales.forEach((det, index) => {
     total += det.subtotal;
     const tr = document.createElement("tr");
+
+    // Si está en borrador (editable), la cantidad es un input interactivo
+    const celdaCantidad = modoSoloLectura
+      ? `<td>${det.cantidad}</td>`
+      : `<td>
+           <input type="number" min="1" value="${det.cantidad}" 
+                  style="width: 70px; padding: 4px;" 
+                  onchange="modificarCantidadLinea(${index}, this.value)" />
+         </td>`;
+
     tr.innerHTML = `
       <td>${det.nombre}</td>
       <td>$${det.precioUnitario.toFixed(2)}</td>
-      <td>${det.cantidad}</td>
+      ${celdaCantidad}
+      <td>${det.porcentajeBonificacion > 0 ? `${det.porcentajeBonificacion}%` : "-"}</td>
       <td>$${det.subtotal.toFixed(2)}</td>
       <td>${
         modoSoloLectura
@@ -472,8 +560,29 @@ function actualizarTablaDetallesUI() {
   if (totalEl) totalEl.textContent = total.toFixed(2);
 }
 
+// Función interactiva para modificar la cantidad de un ítem en borrador
+(window as any).modificarCantidadLinea = (
+  index: number,
+  nuevaCantidadStr: string,
+) => {
+  if (modoSoloLectura) return;
+  const nuevaCant = parseInt(nuevaCantidadStr);
+  if (isNaN(nuevaCant) || nuevaCant <= 0) {
+    alert("La cantidad debe ser mayor a 0.");
+    actualizarTablaDetallesUI();
+    return;
+  }
+
+  const det = detallesActuales[index];
+  det.cantidad = nuevaCant;
+  const neto =
+    det.cantidad * det.precioUnitario * (1 - det.porcentajeBonificacion / 100);
+  det.subtotal = neto * 1.21;
+  actualizarTablaDetallesUI();
+};
+
 (window as any).quitarLinea = (index: number) => {
-  if (modoSoloLectura) return; // defensa extra: no se puede editar en solo lectura
+  if (modoSoloLectura) return;
   detallesActuales.splice(index, 1);
   actualizarTablaDetallesUI();
 };
@@ -520,6 +629,7 @@ async function guardarOActualizarFactura(esActualizacion: boolean) {
     detalles: detallesActuales.map((d) => ({
       articuloId: d.articuloId,
       cantidad: d.cantidad,
+      porcentajeBonificacion: d.porcentajeBonificacion,
     })),
   };
 
@@ -538,7 +648,9 @@ async function guardarOActualizarFactura(esActualizacion: boolean) {
   }
 }
 
-// ------------------------------------------------------------- GRILLA DE HISTORIAL
+// -------------------------------------------------------------
+// REGLA 5: PAGINACIÓN EXACTA (Página X de Y - Total: N facturas)
+// -------------------------------------------------------------
 async function cargarGrillaFacturas() {
   const filtroNumero = (
     document.getElementById("filtroNumero") as HTMLInputElement
@@ -575,10 +687,23 @@ async function cargarGrillaFacturas() {
     });
 
     renderizarTablaFacturas(pagina.contenido);
+
+    // Cálculo y renderizado de la barra de paginación
+    const totalPaginasCalculadas = Math.max(1, pagina.totalPaginas);
     const pagSpan = document.getElementById("infoPaginacion");
     if (pagSpan) {
-      pagSpan.textContent = `Página ${pagina.pagina + 1} de ${pagina.totalPaginas || 1}`;
+      pagSpan.textContent = `Página ${pagina.pagina + 1} de ${totalPaginasCalculadas} (Total: ${pagina.totalElementos} facturas)`;
     }
+
+    const btnAnt = document.getElementById(
+      "btnPaginaAnterior",
+    ) as HTMLButtonElement;
+    const btnSig = document.getElementById(
+      "btnPaginaSiguiente",
+    ) as HTMLButtonElement;
+
+    if (btnAnt) btnAnt.disabled = paginaActual <= 0;
+    if (btnSig) btnSig.disabled = paginaActual >= totalPaginasCalculadas - 1;
   } catch (error) {
     console.error("Error al cargar la grilla de facturas:", error);
   }
@@ -640,13 +765,13 @@ function renderizarTablaFacturas(facturas: FacturaReporteDTO[]) {
         String(f.clienteId);
       (
         document.getElementById("clienteNombreInput") as HTMLInputElement
-      ).value = `${f.clienteDenominacion} (ID: ${f.clienteId})`;
+      ).value = `${f.clienteDenominacion || "Cliente"} (ID: ${f.clienteId})`;
     } else {
       (document.getElementById("clienteIdHidden") as HTMLInputElement).value =
         "";
       (
         document.getElementById("clienteNombreInput") as HTMLInputElement
-      ).value = "Consumidor Final";
+      ).value = "";
     }
 
     detallesActuales = f.detalles.map((d) => ({
@@ -654,6 +779,7 @@ function renderizarTablaFacturas(facturas: FacturaReporteDTO[]) {
       nombre: d.descripcion || d.articuloDenominacion,
       precioUnitario: d.precioUnitario,
       cantidad: d.cantidad,
+      porcentajeBonificacion: 0,
       subtotal: d.importeSubtotal,
     }));
     actualizarTablaDetallesUI();
@@ -677,7 +803,7 @@ function renderizarTablaFacturas(facturas: FacturaReporteDTO[]) {
       !f.numero && !tieneCae ? "inline-block" : "none";
     document.getElementById("btnImprimirPdf")!.style.display = "inline-block";
 
-    // GESTIÓN DEL BOTÓN ANULAR:
+    // BOTÓN ANULAR: Si tiene CAE, se muestra bloqueado/deshabilitado
     const btnAnular = document.getElementById(
       "btnAnularFactura",
     ) as HTMLButtonElement;
@@ -685,7 +811,6 @@ function renderizarTablaFacturas(facturas: FacturaReporteDTO[]) {
       if (esAnulada) {
         btnAnular.style.display = "none";
       } else if (tieneCae) {
-        // Si ya tiene CAE, se muestra pero bloqueado (no presionable)
         btnAnular.style.display = "inline-block";
         btnAnular.disabled = true;
         btnAnular.title =
