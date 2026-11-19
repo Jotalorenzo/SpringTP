@@ -15,7 +15,8 @@ import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder;
 import org.springframework.stereotype.Service;
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import javax.net.ssl.*;
 import java.io.*;
 import java.net.HttpURLConnection;
@@ -36,6 +37,8 @@ import java.util.Collections;
 @Service
 public class AfipWsaaService {
 
+    private static final Logger log = LoggerFactory.getLogger(AfipWsaaService.class);
+
     private static final String URL_WSAA_HOMO = "https://wsaahomo.afip.gov.ar/ws/services/LoginCms";
     private static final ZoneId ZONA_ARG = ZoneId.of("America/Argentina/Buenos_Aires");
     private static final DateTimeFormatter AFIP_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX");
@@ -55,20 +58,29 @@ public class AfipWsaaService {
         try {
             TrustManager[] trustAll = new TrustManager[]{
                 new X509TrustManager() {
-                    public X509Certificate[] getAcceptedIssuers() { return null; }
-                    public void checkClientTrusted(X509Certificate[] c, String a) {}
-                    public void checkServerTrusted(X509Certificate[] c, String a) {}
+                    public X509Certificate[] getAcceptedIssuers() {
+                        return null;
+                    }
+
+                    public void checkClientTrusted(X509Certificate[] c, String a) {
+                    }
+
+                    public void checkServerTrusted(X509Certificate[] c, String a) {
+                    }
                 }
             };
             SSLContext sc = SSLContext.getInstance("TLS");
             sc.init(null, trustAll, new SecureRandom());
             HttpsURLConnection.setDefaultSSLSocketFactory(sc.getSocketFactory());
             HttpsURLConnection.setDefaultHostnameVerifier((hostname, session) -> true);
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            log.warn("No se pudo deshabilitar la validación SSL para homologación: {}", e.getMessage());
+        }
     }
 
     /**
-     * Obtiene Token y Sign. Primero intenta leer del archivo local en disco si no ha vencido.
+     * Obtiene Token y Sign. Primero intenta leer del archivo local en disco si
+     * no ha vencido.
      */
     public synchronized String[] obtenerTokenYSign() throws Exception {
         String[] credencialesGuardadas = leerDeDiscoSiValido();
@@ -94,7 +106,9 @@ public class AfipWsaaService {
     private String[] leerDeDiscoSiValido() {
         try {
             File f = new File(CACHE_FILE);
-            if (!f.exists()) return null;
+            if (!f.exists()) {
+                return null;
+            }
 
             String contenido = Files.readString(Paths.get(CACHE_FILE));
             String expirationStr = extraerTag(contenido, "expirationTime");
@@ -120,7 +134,9 @@ public class AfipWsaaService {
                     + "<sign>" + sign + "</sign>"
                     + "</loginTicketResponse>";
             Files.writeString(Paths.get(CACHE_FILE), xml);
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            log.warn("No se pudo escribir el archivo de cache de TA ({}): {}", CACHE_FILE, e.getMessage());
+        }
     }
 
     private String construirTra() {
@@ -181,7 +197,9 @@ public class AfipWsaaService {
         try (BufferedReader br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
             StringBuilder sb = new StringBuilder();
             String line;
-            while ((line = br.readLine()) != null) sb.append(line.trim());
+            while ((line = br.readLine()) != null) {
+                sb.append(line.trim());
+            }
             String response = sb.toString();
             if (status >= 400 || response.contains("<faultstring>")) {
                 throw new RuntimeException("WSAA Error (" + status + "): " + response);
@@ -212,13 +230,18 @@ public class AfipWsaaService {
         if (!file.exists()) {
             throw new FileNotFoundException("No se encontró la clave privada en: " + file.getAbsolutePath());
         }
-        try (Reader reader = new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8);
-             PEMParser pemParser = new PEMParser(reader)) {
+        try (Reader reader = new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8); PEMParser pemParser = new PEMParser(reader)) {
             Object parsed = pemParser.readObject();
             JcaPEMKeyConverter converter = new JcaPEMKeyConverter().setProvider("BC");
-            if (parsed instanceof PEMKeyPair pkp) return converter.getKeyPair(pkp).getPrivate();
-            if (parsed instanceof PrivateKeyInfo pki) return converter.getPrivateKey(pki);
-            if (parsed instanceof PrivateKey pk) return pk;
+            if (parsed instanceof PEMKeyPair pkp) {
+                return converter.getKeyPair(pkp).getPrivate();
+            }
+            if (parsed instanceof PrivateKeyInfo pki) {
+                return converter.getPrivateKey(pki);
+            }
+            if (parsed instanceof PrivateKey pk) {
+                return pk;
+            }
             throw new IllegalArgumentException("Formato de clave privada no soportado en: " + path);
         }
     }

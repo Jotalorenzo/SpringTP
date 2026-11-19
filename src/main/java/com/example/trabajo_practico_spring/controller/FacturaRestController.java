@@ -5,6 +5,7 @@ import com.example.trabajo_practico_spring.model.*;
 import com.example.trabajo_practico_spring.repository.*;
 import com.example.trabajo_practico_spring.service.*;
 import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
@@ -19,6 +20,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/facturas")
 @CrossOrigin(origins = "*")
+@Slf4j
 public class FacturaRestController {
 
     private final FacturaService facturaService;
@@ -64,7 +66,6 @@ public class FacturaRestController {
                 numeroFactura, fechaDesde, fechaHasta, cliente, estado, informadaArca, page, size));
     }
 
-    // ------------------------------------------------------------- EXPLORER (Máximo 100 registros)
     @GetMapping("/clientes/buscar")
     public ResponseEntity<List<ClienteDTO>> buscarClientesExplorer(@RequestParam(required = false) String q) {
         return ResponseEntity.ok(facturaService.buscarClientesExplorer(q));
@@ -102,7 +103,6 @@ public class FacturaRestController {
         return ResponseEntity.ok(facturaService.obtener(id));
     }
 
-    // ------------------------------------------------------------- ESCRITURA
     @PostMapping
     public ResponseEntity<FacturaReporteDTO> crear(@RequestBody @Valid FacturaRequestDTO request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(facturaService.crear(request));
@@ -127,12 +127,15 @@ public class FacturaRestController {
     @PutMapping("/{id}/informar-arca")
     public ResponseEntity<?> informarArca(@PathVariable Long id) {
         try {
+            log.info("Solicitando autorización ARCA para comprobante ID: {}", id);
             FacturaReporteDTO resultado = facturaService.informarArca(id);
+            log.info("Factura ID {} autorizada exitosamente con CAE: {}", id, resultado.getCae());
             return ResponseEntity.ok(resultado);
         } catch (com.example.trabajo_practico_spring.exception.OperacionNoPermitidaException e) {
+            log.warn("Operación rechazada por regla de negocio en factura ID {}: {}", id, e.getMessage());
             return ResponseEntity.status(HttpStatus.CONFLICT).body(java.util.Map.of("error", e.getMessage()));
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Error al comunicarse con ARCA para la factura ID {}: {}", id, e.getMessage(), e);
             String detalle = (e.getMessage() != null && !e.getMessage().isBlank()) ? e.getMessage() : e.toString();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(java.util.Map.of("error", "Error al comunicarse con ARCA: " + detalle));
@@ -140,7 +143,7 @@ public class FacturaRestController {
     }
 
     @GetMapping(value = "/{id}/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
-    public ResponseEntity<byte[]> descargarFacturaIndividualPdf(@PathVariable Long id) throws Exception {
+    public ResponseEntity<byte[]> descargarFacturaIndividualPdf(@PathVariable Long id) {
         byte[] pdf = facturaPdfService.generarFacturaPdf(id);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=factura-" + id + ".pdf")

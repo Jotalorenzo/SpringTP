@@ -9,6 +9,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.List;
 
 @Service
@@ -53,10 +57,20 @@ public class UsuarioService {
 
     private void copiar(Usuario entidad, UsuarioRequestDTO request) {
         entidad.setUsuario(request.getUsuario());
-        // TODO: hashear la clave (ej. BCrypt) cuando se incorpore Spring Security.
-        entidad.setClave(request.getClave());
+        entidad.setClave(hashearClave(request.getClave()));
         entidad.setNombre(request.getNombre());
         entidad.setApellido(request.getApellido());
+    }
+
+    private String hashearClave(String clavePlana) {
+        if (clavePlana == null || clavePlana.isBlank()) return "";
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(clavePlana.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("Error al hashear la clave del usuario", e);
+        }
     }
 
     private UsuarioDTO aDto(Usuario e) {

@@ -14,9 +14,11 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class FacturaService {
 
     private static final double ALICUOTA_IVA = 0.21;
@@ -167,7 +169,8 @@ public class FacturaService {
         if (factura.getCliente() != null && factura.getCliente().getCuitCuil() != null) {
             try {
                 cuitCliente = Long.parseLong(factura.getCliente().getCuitCuil().replaceAll("[^0-9]", ""));
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                log.debug("El cliente no posee un CUIT numérico válido para ARCA, se usará consumidor final: {}", e.getMessage());
             }
         }
 
@@ -297,6 +300,8 @@ public class FacturaService {
                 .toList();
 
         return FacturaVentaDTO.builder()
+                .puntoVentaId(f.getPuntoVenta() != null ? f.getPuntoVenta().getId() : null)
+                .puntoVentaDescripcion(f.getPuntoVenta() != null ? f.getPuntoVenta().getDescripcion() : "Sin Punto de Venta")
                 .id(f.getId())
                 .numero(f.getNumero())
                 .fechaEmision(f.getFechaEmision())

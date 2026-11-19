@@ -1,6 +1,7 @@
 package com.example.trabajo_practico_spring.service;
 
 import com.example.trabajo_practico_spring.config.AfipProperties;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.io.*;
@@ -12,6 +13,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 
 @Service
+@Slf4j
 public class AfipWsfeService {
 
     private static final String URL_WSFE_HOMO = "https://wswhomo.afip.gov.ar/wsfev1/service.asmx";
@@ -22,16 +24,14 @@ public class AfipWsfeService {
         this.props = props;
     }
 
-    public record ResultadoCae(String cae, LocalDate fechaVencimiento, long nroComprobante) {
-
-    }
+    public record ResultadoCae(String cae, LocalDate fechaVencimiento, long nroComprobante) {}
 
     public ResultadoCae solicitarCae(String token, String sign, double importeTotal, String fechaEmision, Long cuitCliente) throws Exception {
         int cbteTipo = props.getCbteTipo();
-        System.out.println(">>> [WSFE] Consultando último comprobante para PtoVta=" + props.getPuntoVenta() + ", CbteTipo=" + cbteTipo);
+        log.info("Consultando último comprobante ante AFIP para PtoVta={}, CbteTipo={}", props.getPuntoVenta(), cbteTipo);
         long ultimoNro = consultarUltimoNro(token, sign, cbteTipo);
         long nuevoNro = ultimoNro + 1;
-        System.out.println(">>> [WSFE] Último número fue: " + ultimoNro + ". El nuevo comprobante será el N°: " + nuevoNro);
+        log.info("Último número registrado: {}. Próximo comprobante a autorizar: N° {}", ultimoNro, nuevoNro);
 
         String soapReq = construirSolicitudCae(token, sign, nuevoNro, importeTotal, fechaEmision, cbteTipo);
         String response = enviarSoap(URL_WSFE_HOMO, "FECAESolicitar", soapReq);
@@ -96,7 +96,7 @@ public class AfipWsfeService {
                 + "<ar:ImpIVA>0.00</ar:ImpIVA>"
                 + "<ar:MonId>PES</ar:MonId>"
                 + "<ar:MonCotiz>1</ar:MonCotiz>"
-                + "<ar:CondicionIVAReceptorId>5</ar:CondicionIVAReceptorId>" // <--- RESOLUCIÓN GENERAL 5616
+                + "<ar:CondicionIVAReceptorId>5</ar:CondicionIVAReceptorId>"
                 + "</ar:FECAEDetRequest>"
                 + "</ar:FeDetReq>"
                 + "</ar:FeCAEReq>"
@@ -120,7 +120,7 @@ public class AfipWsfeService {
         String vtoStr = extraerTagSeguro(xml, "CAEFchVto");
         LocalDate vto = LocalDate.parse(vtoStr, DateTimeFormatter.ofPattern("yyyyMMdd"));
 
-        System.out.println(">>> [WSFE] ¡Factura APROBADA! CAE=" + cae + ", Vto=" + vto);
+        log.info("Factura autorizada exitosamente ante AFIP. N°: {}, CAE: {}, Vto: {}", nro, cae, vto);
         return new ResultadoCae(cae, vto, nro);
     }
 
@@ -154,7 +154,7 @@ public class AfipWsfeService {
             String response = sb.toString();
 
             if (status >= 400) {
-                System.err.println(">>> [WSFE ERROR HTTP " + status + "]: " + response);
+                log.error("Error HTTP {} en respuesta SOAP de WSFE: {}", status, response);
                 throw new RuntimeException("WSFE HTTP " + status + ": " + response);
             }
             return response;

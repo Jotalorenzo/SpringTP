@@ -6,7 +6,8 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.annotation.Transactional;
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -14,31 +15,33 @@ import java.util.List;
 
 @Configuration
 public class DataSeeder {
+    
+    private static final Logger log = LoggerFactory.getLogger(DataSeeder.class);
 
     @Bean
     CommandLineRunner seed(UsuarioRepository usuarios,
-                           CondicionIvaRepository condiciones,
-                           TipoMonedaRepository monedas,
-                           PuntoVentaRepository puntosVenta,
-                           ClienteRepository clientes,
-                           ArticuloRepository articulos,
-                           ListaPrecioRepository listasPrecio,
-                           ListaPrecioArticuloRepository preciosArticulo,
-                           FacturaVentaRepository facturas) {
+            CondicionIvaRepository condiciones,
+            TipoMonedaRepository monedas,
+            PuntoVentaRepository puntosVenta,
+            ClienteRepository clientes,
+            ArticuloRepository articulos,
+            ListaPrecioRepository listasPrecio,
+            ListaPrecioArticuloRepository preciosArticulo,
+            FacturaVentaRepository facturas) {
         return args -> cargar(usuarios, condiciones, monedas, puntosVenta, clientes,
                 articulos, listasPrecio, preciosArticulo, facturas);
     }
 
     @Transactional
     void cargar(UsuarioRepository usuarios,
-                CondicionIvaRepository condiciones,
-                TipoMonedaRepository monedas,
-                PuntoVentaRepository puntosVenta,
-                ClienteRepository clientes,
-                ArticuloRepository articulos,
-                ListaPrecioRepository listasPrecio,
-                ListaPrecioArticuloRepository preciosArticulo,
-                FacturaVentaRepository facturas) {
+            CondicionIvaRepository condiciones,
+            TipoMonedaRepository monedas,
+            PuntoVentaRepository puntosVenta,
+            ClienteRepository clientes,
+            ArticuloRepository articulos,
+            ListaPrecioRepository listasPrecio,
+            ListaPrecioArticuloRepository preciosArticulo,
+            FacturaVentaRepository facturas) {
 
         // Si ya existen 50 artículos en la base, no duplicamos
         if (articulos.count() >= 50 && clientes.count() >= 50) {
@@ -146,7 +149,9 @@ public class DataSeeder {
             completarAuditoria(c, admin);
             try {
                 clientesList.add(clientes.save(c));
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                log.warn("No se pudo sembrar el cliente {}: {}", c.getDenominacion(), e.getMessage());
+            }
         }
 
         // ------------------------------------------------------------- 50 ARTÍCULOS
@@ -186,7 +191,8 @@ public class DataSeeder {
             completarAuditoria(a, admin);
             try {
                 a = articulos.save(a);
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                log.warn("No se pudo sembrar el artículo {}: {}", a.getCodigo(), e.getMessage());
                 continue;
             }
 
@@ -225,8 +231,8 @@ public class DataSeeder {
     }
 
     private ListaPrecioArticulo precioLista(ListaPrecio lista, Articulo articulo,
-                                            double precio, Usuario admin,
-                                            ListaPrecioArticuloRepository preciosArticulo) {
+            double precio, Usuario admin,
+            ListaPrecioArticuloRepository preciosArticulo) {
         ListaPrecioArticulo lpa = new ListaPrecioArticulo();
         lpa.setListaPrecio(lista);
         lpa.setArticulo(articulo);
@@ -251,8 +257,8 @@ public class DataSeeder {
     }
 
     private FacturaVenta factura(Long numero, LocalDate fecha, PuntoVenta puntoVenta, Cliente cliente,
-                                 CondicionIva condicion, TipoMoneda moneda, ListaPrecio lista, String letra,
-                                 double total, String estado, Usuario admin, List<FacturaVentaDetalle> detalles) {
+            CondicionIva condicion, TipoMoneda moneda, ListaPrecio lista, String letra,
+            double total, String estado, Usuario admin, List<FacturaVentaDetalle> detalles) {
         FacturaVenta f = new FacturaVenta();
         f.setNumero(numero);
         f.setFechaEmision(fecha);

@@ -21,7 +21,7 @@ public class TestWsaaMain {
             System.out.println("OK - Autenticacion exitosa");
         } catch (Exception e) {
             System.out.println("ERROR: " + e.getMessage());
-            e.printStackTrace();
+            System.err.println("ERROR: " + e.getMessage());
         }
     }
 }

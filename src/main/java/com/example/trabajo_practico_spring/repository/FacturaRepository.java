@@ -24,8 +24,8 @@ public class FacturaRepository {
             "   f.numero, " +
             "   f.fechaEmision, " +
             "   COALESCE(c.denominacion, 'Consumidor Final'), " +
-            "   ci.denominacion, " +
-            "   pv.descripcion, " +
+            "   COALESCE(ci.denominacion, 'Consumidor Final'), " +
+            "   COALESCE(pv.descripcion, 'Punto de Venta'), " +
             "   f.importeTotal, " +
             "   COUNT(d), " +
             "   f.estado, " +
@@ -33,8 +33,8 @@ public class FacturaRepository {
             ") " +
             "FROM FacturaVenta f " +
             "LEFT JOIN f.cliente c " +
-            "JOIN f.condicionIva ci " +
-            "JOIN f.puntoVenta pv " +
+            "LEFT JOIN f.condicionIva ci " +
+            "LEFT JOIN f.puntoVenta pv " +
             "LEFT JOIN f.detalles d ";
 
     private static final String GROUP_BY =
@@ -87,7 +87,10 @@ public class FacturaRepository {
         List<FacturaReporteDTO> contenido = query.getResultList();
 
         // 2. Consulta de Conteo Total
-        String jpqlCount = "SELECT COUNT(f) FROM FacturaVenta f LEFT JOIN f.cliente c " + whereClause;
+        String jpqlCount = "SELECT COUNT(DISTINCT f) FROM FacturaVenta f " +
+                "LEFT JOIN f.cliente c " +
+                "LEFT JOIN f.condicionIva ci " +
+                "LEFT JOIN f.puntoVenta pv " + whereClause;
         TypedQuery<Long> queryCount = em.createQuery(jpqlCount, Long.class);
         params.forEach(queryCount::setParameter);
         long totalElementos = queryCount.getSingleResult();

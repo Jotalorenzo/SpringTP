@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.awt.Color;
 import java.io.ByteArrayOutputStream;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 
@@ -46,7 +47,6 @@ public class FacturaPdfService {
         Font fontLetraSub = new Font(Font.HELVETICA, 7, Font.NORMAL);
         Font fontCae = new Font(Font.HELVETICA, 9, Font.BOLD);
 
-        // Determinación de Letra de Factura (A para Responsables Inscriptos, B para Consumidor Final)
         String letra = factura.getLetra() != null ? factura.getLetra().toUpperCase() : "B";
         String codAfip = "COD. 06";
 
@@ -59,22 +59,26 @@ public class FacturaPdfService {
         }
 
         // ==========================================
-        // 1. CABECERA PRINCIPAL (3 Columnas con Letra al centro)
+        // 1. CABECERA PRINCIPAL (Protegida contra NullPointerException)
         // ==========================================
         PdfPTable tablaCabecera = new PdfPTable(new float[]{45f, 10f, 45f});
         tablaCabecera.setWidthPercentage(100);
 
-        // Columna Izquierda: Datos del Emisor
+        // Columna Izquierda: Emisor
         PdfPCell celdaEmisor = new PdfPCell();
         celdaEmisor.setPadding(8f);
         celdaEmisor.addElement(new Phrase("DISTRIBUIDORA CENTRAL S.A.", fontTitulo));
         celdaEmisor.addElement(new Phrase("Razón Social: Distribuidora Central S.A.", fontTexto));
-        celdaEmisor.addElement(new Phrase("Domicilio: " + factura.getPuntoVenta().getDomicilioComercial(), fontTexto));
+        
+        String domicilioEmisor = (factura.getPuntoVenta() != null && factura.getPuntoVenta().getDomicilioComercial() != null)
+                ? factura.getPuntoVenta().getDomicilioComercial()
+                : "Av. Corrientes 800, CABA";
+        celdaEmisor.addElement(new Phrase("Domicilio: " + domicilioEmisor, fontTexto));
         celdaEmisor.addElement(new Phrase("Condición IVA: IVA Responsable Inscripto", fontTexto));
         celdaEmisor.setBorder(PdfPCell.BOX);
         tablaCabecera.addCell(celdaEmisor);
 
-        // Columna Centro: Recuadro con la Letra A / B
+        // Columna Centro: Letra Comprobante
         PdfPCell celdaLetra = new PdfPCell();
         celdaLetra.setHorizontalAlignment(Element.ALIGN_CENTER);
         celdaLetra.setVerticalAlignment(Element.ALIGN_MIDDLE);
@@ -84,14 +88,16 @@ public class FacturaPdfService {
         celdaLetra.setBorder(PdfPCell.BOX);
         tablaCabecera.addCell(celdaLetra);
 
-        // Columna Derecha: Datos del Comprobante
+        // Columna Derecha: Comprobante
         PdfPCell celdaFactura = new PdfPCell();
         celdaFactura.setPadding(8f);
         celdaFactura.addElement(new Phrase("FACTURA", fontTitulo));
-        String numPuntoVenta = String.format("%04d", factura.getPuntoVenta().getNumero());
+        String numPuntoVenta = String.format("%04d", factura.getPuntoVenta() != null ? factura.getPuntoVenta().getNumero() : 1);
         String numFactura = String.format("%08d", factura.getNumero() != null ? factura.getNumero() : 0);
         celdaFactura.addElement(new Phrase("Punto de Venta: " + numPuntoVenta + "  Comp. Nro: " + numFactura, fontSubtitulo));
-        celdaFactura.addElement(new Phrase("Fecha de Emisión: " + factura.getFechaEmision().format(FORMATO_FECHA), fontTexto));
+        
+        String fechaStr = factura.getFechaEmision() != null ? factura.getFechaEmision().format(FORMATO_FECHA) : LocalDate.now().format(FORMATO_FECHA);
+        celdaFactura.addElement(new Phrase("Fecha de Emisión: " + fechaStr, fontTexto));
         celdaFactura.addElement(new Phrase("CUIT Emisor: 30-71234567-9", fontTexto));
         celdaFactura.addElement(new Phrase("Ingresos Brutos: 901-283849-2", fontTexto));
         celdaFactura.addElement(new Phrase("Inicio de Actividades: 01/01/2010", fontTexto));
@@ -120,7 +126,7 @@ public class FacturaPdfService {
         cCliente2.setPadding(6f);
         String condIva = factura.getCondicionIva() != null ? factura.getCondicionIva().getDenominacion() : "Consumidor Final";
         cCliente2.addElement(new Phrase("Condición frente al IVA: " + condIva, fontSubtitulo));
-        cCliente2.addElement(new Phrase("Condición de Venta: Contado / Saldo: $" + factura.getImporteSaldo(), fontTexto));
+        cCliente2.addElement(new Phrase("Condición de Venta: Contado / Saldo: $" + String.format(Locale.US, "%.2f", factura.getImporteSaldo()), fontTexto));
         cCliente2.setBorder(PdfPCell.BOX);
         tablaCliente.addCell(cCliente2);
 
@@ -133,7 +139,6 @@ public class FacturaPdfService {
         tablaDetalles.setWidthPercentage(100);
         tablaDetalles.setSpacingBefore(10f);
 
-        // Encabezados
         String[] cabeceras = {"Código", "Descripción", "Cant.", "Precio Unit.", "Subtotal"};
         for (String cab : cabeceras) {
             PdfPCell c = new PdfPCell(new Phrase(cab, fontSubtitulo));
@@ -143,9 +148,11 @@ public class FacturaPdfService {
             tablaDetalles.addCell(c);
         }
 
-        // Renglones
         for (FacturaVentaDetalle det : factura.getDetalles()) {
-            tablaDetalles.addCell(crearCeldaItem(det.getListaPrecioArticulo().getArticulo().getCodigo(), fontTexto, Element.ALIGN_CENTER));
+            String codigo = (det.getListaPrecioArticulo() != null && det.getListaPrecioArticulo().getArticulo() != null)
+                    ? det.getListaPrecioArticulo().getArticulo().getCodigo()
+                    : "-";
+            tablaDetalles.addCell(crearCeldaItem(codigo, fontTexto, Element.ALIGN_CENTER));
             tablaDetalles.addCell(crearCeldaItem(det.getDescripcion(), fontTexto, Element.ALIGN_LEFT));
             tablaDetalles.addCell(crearCeldaItem(String.valueOf(det.getCantidad()), fontTexto, Element.ALIGN_CENTER));
             tablaDetalles.addCell(crearCeldaItem(String.format(Locale.US, "$ %.2f", det.getPrecioUnitario()), fontTexto, Element.ALIGN_RIGHT));
