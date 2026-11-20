@@ -592,7 +592,7 @@ window.seleccionarFactura = async (id) => {
             nombre: d.descripcion || d.articuloDenominacion,
             precioUnitario: d.precioUnitario,
             cantidad: d.cantidad,
-            porcentajeBonificacion: 0,
+            porcentajeBonificacion: d.porcentajeBonificacion || 0,
             subtotal: d.importeSubtotal,
         }));
         actualizarTablaDetallesUI();
