@@ -317,27 +317,32 @@ window.seleccionarClienteExplorer = (id, denominacion) => {
     document.getElementById("modalCliente").style.display = "none";
 };
 async function ejecutarBusquedaArticulos(filtro = "") {
-    const lpId = parseInt(document.getElementById("listaPrecioSelect").value) || 1;
+    const lpSelect = document.getElementById("listaPrecioSelect");
+    const lpId = parseInt(lpSelect.value) || 1;
+    const nombreLista = lpSelect.options[lpSelect.selectedIndex]?.text || "Lista de Precios";
+    // Mostramos en el título del Explorer con qué lista se está cotizando
+    const tituloModal = document.querySelector("#modalArticulo .modal-header h4");
+    if (tituloModal) {
+        tituloModal.textContent = `Explorer de Artículos — ${nombreLista}`;
+    }
     const tbody = document.querySelector("#tablaModalArticulos tbody");
     tbody.innerHTML =
-        '<tr><td colspan="6" style="text-align:center;">Buscando artículos en catálogo...</td></tr>';
+        '<tr><td colspan="4" style="text-align:center;">Buscando artículos en catálogo...</td></tr>';
     try {
         const articulos = await facturaService.buscarArticulosExplorer(lpId, filtro);
         if (articulos.length === 0) {
             tbody.innerHTML =
-                '<tr><td colspan="6" style="text-align:center;">No se encontraron artículos para esta lista.</td></tr>';
+                '<tr><td colspan="4" style="text-align:center;">No se encontraron artículos para esta lista.</td></tr>';
             return;
         }
         tbody.innerHTML = articulos
             .map((a) => `
         <tr>
-          <td>${a.articuloId}</td>
-          <td>${a.codigo}</td>
+          <td><strong>${a.codigo}</strong></td>
           <td>${a.denominacion}</td>
-          <td>$${a.precioVenta.toFixed(2)}</td>
-          <td>$${(a.precioVenta * 0.77).toFixed(2)}</td>
+          <td><strong style="color: #047857;">$${a.precioVenta.toFixed(2)}</strong></td>
           <td>
-            <button type="button" class="btn-primary" style="padding: 4px 8px;" onclick="seleccionarArticuloExplorer(${a.articuloId}, '${a.codigo}', '${a.denominacion.replace(/'/g, "\\'")}', ${a.precioVenta})">
+            <button type="button" class="btn-primary" style="padding: 4px 10px;" onclick="seleccionarArticuloExplorer(${a.articuloId}, '${a.codigo}', '${a.denominacion.replace(/'/g, "\\'")}', ${a.precioVenta})">
               Elegir
             </button>
           </td>
@@ -346,7 +351,7 @@ async function ejecutarBusquedaArticulos(filtro = "") {
             .join("");
     }
     catch (err) {
-        tbody.innerHTML = `<tr><td colspan="6" style="color:red; text-align:center;">Error: ${err.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="4" style="color:red; text-align:center;">Error: ${err.message}</td></tr>`;
     }
 }
 window.seleccionarArticuloExplorer = (id, codigo, denominacion, precio) => {
